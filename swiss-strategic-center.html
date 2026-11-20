@@ -1,0 +1,1905 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Swiss Strategic Center</title>
+
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<!-- Lokale Datenmodule (liegen im Ordner data/ neben dieser Datei) -->
+<script src="data/zones.js"></script>
+<script src="data/conflicts.js"></script>
+<script src="data/swiss.js"></script>
+<script src="data/countries-europe.js"></script>
+<script src="data/countries-mena.js"></script>
+<script src="data/countries-africa.js"></script>
+<script src="data/countries-asia.js"></script>
+<script src="data/countries-americas.js"></script>
+<!-- Laufendes Lage-Update (wird vom geplanten Task neu geschrieben und von der App alle 10 Min. nachgeladen) -->
+<script src="data/update.js"></script>
+
+<script>
+  tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] } } } };
+</script>
+
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --glass: rgba(18, 20, 26, 0.64);
+    --glass-strong: rgba(14, 16, 22, 0.88);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-hi: rgba(255, 255, 255, 0.15);
+    --text: #e8eaf0;
+    --muted: #8a90a2;
+    --cyan: #5ee7ff;
+    --red: #ff4d6d;
+    --amber: #ffb547;
+    --green: #3ee6a8;
+    --ch: #ff2d3a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    background: radial-gradient(1100px 520px at 12% -12%, rgba(255, 45, 58, 0.07), transparent 60%), radial-gradient(900px 500px at 110% 110%, rgba(94, 231, 255, 0.06), transparent 60%); }
+
+  .glass { background: var(--glass); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); border: 1px solid var(--glass-border); box-shadow: 0 10px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.04); }
+  .glass-strong { background: var(--glass-strong); }
+  .hairline { border-color: var(--glass-border); }
+  .muted { color: var(--muted); }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .btn { display: inline-flex; align-items: center; gap: .45rem; padding: .45rem .75rem; border-radius: .65rem; font-size: .78rem; font-weight: 500; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid var(--glass-border); transition: all .2s ease; cursor: pointer; white-space: nowrap; user-select: none; }
+  .btn:hover { background: rgba(255,255,255,.09); border-color: var(--glass-hi); }
+  .btn.active { background: rgba(94,231,255,.12); border-color: rgba(94,231,255,.45); color: #c9f7ff; box-shadow: 0 0 18px rgba(94,231,255,.15); }
+  .btn.ch.active, .btn.ch:hover { background: rgba(255,45,58,.15); border-color: rgba(255,45,58,.55); color: #ffd6d9; box-shadow: 0 0 18px rgba(255,45,58,.2); }
+  .btn svg { width: 15px; height: 15px; }
+
+  .seg { display: inline-flex; padding: 3px; border-radius: .75rem; background: rgba(255,255,255,.04); border: 1px solid var(--glass-border); }
+  .seg button { padding: .34rem .52rem; font-size: .73rem; border-radius: .55rem; color: var(--muted); display: inline-flex; gap: .32rem; align-items: center; transition: all .2s; }
+  .seg button svg { width: 13px; height: 13px; }
+  .seg button.on { background: rgba(255,255,255,.1); color: var(--text); box-shadow: inset 0 0 0 1px var(--glass-hi); }
+
+  .chip { display: inline-flex; align-items: center; gap: .35rem; font-size: .68rem; padding: .18rem .5rem; border-radius: 999px; border: 1px solid var(--glass-border); background: rgba(255,255,255,.04); white-space: nowrap; }
+  .chip.btnchip { cursor: pointer; } .chip.btnchip:hover { border-color: var(--glass-hi); }
+  .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; flex: none; }
+
+  .toggle { position: relative; width: 30px; height: 17px; border-radius: 999px; background: rgba(255,255,255,.12); transition: .2s; flex: none; }
+  .toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 999px; background: #9aa0b0; transition: .2s; }
+  .toggle.on { background: rgba(94,231,255,.45); } .toggle.on::after { left: 15px; background: #fff; }
+
+  .scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.15) transparent; }
+  .scroll::-webkit-scrollbar { width: 6px; } .scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 6px; }
+
+  #sidebar { transform: translateX(110%); transition: transform .45s cubic-bezier(.2,.8,.2,1); }
+  #sidebar.open { transform: translateX(0); }
+  #leftPanel { transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .3s; }
+  #leftPanel.collapsed { transform: translateX(calc(-100% - 24px)); opacity: 0; pointer-events: none; }
+  .fade-in { animation: fadeIn .35s ease both; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .tab { font-size: .76rem; padding: .55rem .1rem; color: var(--muted); border-bottom: 2px solid transparent; transition: .2s; display: inline-flex; gap: .35rem; align-items: center; white-space: nowrap; }
+  .tab svg { width: 14px; height: 14px; }
+  .tab.on { color: var(--text); border-color: var(--cyan); }
+  .tab.ch.on { border-color: var(--ch); }
+
+  .card { background: rgba(255,255,255,.03); border: 1px solid var(--glass-border); border-radius: .9rem; padding: .9rem 1rem; }
+  .card h4 { font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .45rem; display: flex; align-items: center; gap: .4rem; }
+  .card h4 svg { width: 13px; height: 13px; }
+  .card p { font-size: .83rem; line-height: 1.55; color: #cfd3de; }
+  .card.ch { border-color: rgba(255,45,58,.35); background: linear-gradient(135deg, rgba(255,45,58,.09), rgba(255,255,255,.02)); }
+
+  .conf-item { transition: all .2s; cursor: pointer; }
+  .conf-item:hover { background: rgba(255,255,255,.06) !important; border-color: var(--glass-hi); transform: translateX(2px); }
+  .conf-item.sel { border-color: rgba(255,77,109,.6); background: rgba(255,77,109,.08) !important; }
+  .intensity { display: inline-flex; gap: 2px; } .intensity i { width: 5px; height: 11px; border-radius: 2px; background: rgba(255,255,255,.12); display: block; }
+  .meter { display: inline-flex; gap: 3px; } .meter i { width: 14px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); display: block; }
+
+  #tooltip { position: fixed; z-index: 70; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity .15s, transform .15s; max-width: 280px; }
+  #tooltip.show { opacity: 1; transform: none; }
+  #toast { position: fixed; z-index: 80; left: 50%; top: 84px; transform: translate(-50%, -12px); opacity: 0; pointer-events: none; transition: all .3s ease; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .ticker-track { display: inline-flex; gap: 2.5rem; white-space: nowrap; animation: ticker 110s linear infinite; padding-left: 100%; }
+  .ticker:hover .ticker-track { animation-play-state: paused; }
+  @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+  .live-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--red); animation: livePulse 1.8s infinite; }
+  @keyframes livePulse { 0% { box-shadow: 0 0 0 0 rgba(255,77,109,.6); } 70% { box-shadow: 0 0 0 8px rgba(255,77,109,0); } 100% { box-shadow: 0 0 0 0 rgba(255,77,109,0); } }
+
+  #projFade { position: absolute; inset: 0; background: var(--bg); opacity: 0; pointer-events: none; transition: opacity .35s ease; z-index: 5; }
+  #projFade.on { opacity: .85; }
+
+  .maplibregl-ctrl-attrib { background: rgba(10,10,10,.6) !important; color: #777 !important; font-size: 10px !important; }
+  .maplibregl-ctrl-attrib a { color: #999 !important; }
+  .maplibregl-ctrl-group { background: var(--glass-strong) !important; border: 1px solid var(--glass-border) !important; box-shadow: none !important; }
+  .maplibregl-ctrl-group button { filter: invert(1) brightness(.85); }
+  .maplibregl-popup-content { background: var(--glass-strong) !important; color: var(--text); border: 1px solid var(--glass-border); border-radius: 12px !important; backdrop-filter: blur(14px); padding: 12px 14px !important; box-shadow: 0 10px 30px rgba(0,0,0,.5) !important; }
+  .maplibregl-popup-tip { border-top-color: rgba(14,16,22,.88) !important; border-bottom-color: rgba(14,16,22,.88) !important; }
+  .maplibregl-popup-close-button { color: #999; font-size: 16px; right: 4px; top: 2px; }
+
+  #swissView { opacity: 0; pointer-events: none; transition: opacity .45s ease; }
+  #swissView.open { opacity: 1; pointer-events: auto; }
+  #swissView .inner { transform: scale(.985); transition: transform .45s cubic-bezier(.2,.8,.2,1); }
+  #swissView.open .inner { transform: none; }
+  .status-pill { font-size: .64rem; padding: .12rem .45rem; border-radius: 999px; font-weight: 600; letter-spacing: .02em; white-space: nowrap; }
+
+  #loader { transition: opacity .6s ease; } #loader.hide { opacity: 0; pointer-events: none; }
+  .scanline { position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--ch), transparent); animation: scan 1.6s ease-in-out infinite; }
+  @keyframes scan { 0% { top: 0; } 50% { top: calc(100% - 2px); } 100% { top: 0; } }
+
+  input, textarea, select { background: rgba(255,255,255,.04); border: 1px solid var(--glass-border); color: var(--text); border-radius: .6rem; outline: none; }
+  input:focus, select:focus { border-color: rgba(94,231,255,.5); }
+  .bm-opt { cursor: pointer; border-radius: .6rem; border: 1px solid var(--glass-border); padding: .4rem; text-align: center; font-size: .7rem; transition: .2s; }
+  .bm-opt.on { border-color: rgba(94,231,255,.6); background: rgba(94,231,255,.1); }
+  .bm-opt .sw { height: 30px; border-radius: .4rem; margin-bottom: .3rem; }
+
+  @media (max-width: 900px) {
+    #sidebar { width: 100% !important; top: auto !important; height: 72vh; bottom: 0 !important; right: 0 !important; border-radius: 1.2rem 1.2rem 0 0 !important; transform: translateY(110%); }
+    #sidebar.open { transform: translateY(0); }
+    #leftPanel { width: calc(100% - 32px) !important; max-height: 55vh !important; }
+    .hide-sm { display: none !important; }
+  }
+</style>
+</head>
+
+<body>
+<div id="map" class="absolute inset-0"></div>
+<div id="projFade"></div>
+
+<div id="loader" class="fixed inset-0 z-[100] flex items-center justify-center" style="background:#0a0a0a">
+  <div class="text-center">
+    <div class="relative w-24 h-24 mx-auto mb-6 rounded-2xl overflow-hidden flex items-center justify-center" style="background:#ff2d3a">
+      <svg viewBox="0 0 32 32" width="64" height="64"><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>
+      <div class="scanline" style="background:linear-gradient(90deg,transparent,#fff,transparent)"></div>
+    </div>
+    <div class="text-sm tracking-[0.35em] uppercase">Swiss Strategic Center</div>
+    <div id="loaderMsg" class="mono text-xs mt-2 muted">Lade Lagebild …</div>
+  </div>
+</div>
+
+<!-- ================= TOP-BAR ================= -->
+<header class="fixed top-4 left-4 right-4 z-30 flex items-center gap-3 pointer-events-none">
+  <div class="glass rounded-2xl px-3.5 py-2.5 flex items-center gap-3 pointer-events-auto">
+    <svg viewBox="0 0 32 32" width="32" height="32" class="flex-none" style="filter:drop-shadow(0 0 10px rgba(255,45,58,.45))"><rect width="32" height="32" rx="7" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>
+    <div class="leading-tight hide-sm">
+      <div class="text-[13px] font-semibold tracking-[.08em]">SWISS STRATEGIC <span style="color:var(--ch)">CENTER</span></div>
+      <div class="text-[10px] muted mono">Geopolitisches Lagezentrum · Perspektive Schweiz</div>
+    </div>
+  </div>
+  <div class="glass rounded-2xl px-3 py-2 flex items-center gap-2 pointer-events-auto relative w-[270px] max-w-[38vw]">
+    <i data-lucide="search" class="w-4 h-4 muted"></i>
+    <input id="search" type="text" placeholder="Land oder Konflikt suchen …" autocomplete="off" class="text-sm w-full py-1 px-0" style="background:transparent;border:0" />
+    <kbd class="mono text-[10px] muted border hairline rounded px-1.5 hide-sm">/</kbd>
+    <div id="searchResults" class="absolute left-0 right-0 top-full mt-2 glass glass-strong rounded-xl overflow-hidden hidden scroll max-h-80"></div>
+  </div>
+  <div class="flex-1"></div>
+  <div class="glass rounded-2xl px-2.5 py-2 flex items-center gap-2 pointer-events-auto flex-wrap justify-end">
+    <div class="seg" id="projSeg">
+      <button data-proj="mercator" class="on"><i data-lucide="map"></i><span class="hide-sm">Flach</span></button>
+      <button data-proj="globe"><i data-lucide="globe-2"></i><span class="hide-sm">Globus</span></button>
+    </div>
+    <div class="w-px h-6 bg-white/10 hide-sm"></div>
+    <button class="btn active" id="btnConflicts" title="Konfliktzonen & getroffene Orte"><i data-lucide="flame"></i><span class="hide-sm">Konflikte</span></button>
+    <button class="btn" id="btnBlocs" title="Multilaterale Blöcke"><i data-lucide="layers"></i><span class="hide-sm">Blöcke</span></button>
+    <button class="btn" id="btnLayers" title="Karte & Ebenen"><i data-lucide="sliders-horizontal"></i><span class="hide-sm">Karte</span></button>
+    <button class="btn ch" id="btnSwiss" title="Schweiz-Ansicht (S)">
+      <svg viewBox="0 0 32 32" width="15" height="15"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>
+      <span class="hide-sm">Schweiz</span>
+    </button>
+  </div>
+</header>
+
+<div id="layersPop" class="fixed top-[76px] right-4 z-40 glass glass-strong rounded-2xl p-4 w-[310px] hidden fade-in scroll" style="max-height:calc(100vh - 170px)">
+  <div class="text-[11px] uppercase tracking-[.14em] muted mb-2">Basiskarte</div>
+  <div class="grid grid-cols-5 gap-1.5 mb-4" id="basemapOpts"></div>
+  <div class="text-[11px] uppercase tracking-[.14em] muted mb-3">Ebenen</div>
+  <div class="space-y-2.5 text-[13px]" id="layerToggles"></div>
+  <div class="border-t hairline mt-4 pt-3">
+    <div class="text-[11px] uppercase tracking-[.14em] muted mb-2">Daten-Pipeline</div>
+    <div class="flex gap-2 flex-wrap">
+      <label class="btn"><i data-lucide="upload"></i>Import JSON<input type="file" id="importFile" accept=".json,application/json" class="hidden" /></label>
+      <button class="btn" id="exportBtn"><i data-lucide="download"></i>Export</button>
+    </div>
+    <p class="text-[11px] muted mt-2 leading-relaxed">Tägliche Updates als JSON <span class="mono">{ conflicts, events, news }</span> importieren (gleiche <span class="mono">id</span> überschreibt). Ukraine-Front lädt live von DeepStateMap.</p>
+  </div>
+</div>
+
+<!-- ================= LINKES PANEL ================= -->
+<button id="leftToggle" class="fixed left-4 top-[84px] z-20 btn glass hidden"><i data-lucide="panel-left-open"></i>Lage</button>
+<aside id="leftPanel" class="fixed left-4 top-[84px] bottom-[76px] z-20 w-[380px] xl:w-[415px] glass rounded-2xl flex flex-col overflow-hidden">
+  <div class="px-3.5 pt-3 pb-2.5 border-b hairline">
+    <div class="flex items-center justify-between gap-1.5">
+      <div class="seg flex-1 overflow-x-auto justify-between" id="leftTabs">
+        <button data-lt="conf" class="on" title="Konflikte & Brennpunkte (K)"><span class="live-dot"></span><span>Konflikte</span></button>
+        <button data-lt="news" title="Lagezentrum & alle Schlagzeilen (L)"><i data-lucide="newspaper"></i><span>Lage</span></button>
+        <button data-lt="strat" title="Militärgeschichte & 5 Generationen des Krieges (M)"><i data-lucide="swords"></i><span>Strategie</span></button>
+        <button data-lt="ch" title="Lage-Radar Schweiz (S)"><svg viewBox="0 0 32 32" width="12" height="12"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg><span>CH-Radar</span></button>
+      </div>
+      <button class="muted hover:text-white flex-none p-1" id="leftClose" title="Einklappen"><i data-lucide="panel-left-close" class="w-4 h-4"></i></button>
+    </div>
+    <div id="leftHead"></div>
+  </div>
+  <div id="leftBody" class="flex-1 scroll p-3 space-y-2"></div>
+  <div class="px-4 py-2.5 border-t hairline text-[10.5px] muted flex items-center gap-2">
+    <i data-lucide="database" class="w-3.5 h-3.5"></i>
+    <span>Stand: <span id="dataStamp" class="mono"></span></span>
+    <span class="chip" style="font-size:9.5px;color:var(--cyan)" title="Lage-Update wird alle 10 Minuten nachgeladen, Ukraine-Front alle 30 Minuten">AUTO</span>
+    <span class="ml-auto chip" style="color:var(--green)" id="uaLiveChip">Front: lädt …</span>
+  </div>
+</aside>
+
+<aside id="sidebar" class="fixed right-4 top-[84px] bottom-[76px] z-30 w-[440px] glass glass-strong rounded-2xl flex flex-col overflow-hidden">
+  <div id="sidebarContent" class="flex flex-col h-full"></div>
+</aside>
+
+<footer class="fixed left-4 right-4 bottom-4 z-20 flex gap-3 items-stretch">
+  <div id="legend" class="glass rounded-2xl px-4 py-2.5 flex items-center gap-3 text-[11px] flex-wrap hide-sm max-w-[52vw]"></div>
+  <div class="glass rounded-2xl flex-1 flex items-center overflow-hidden min-w-0">
+    <div class="px-3 py-2.5 flex items-center gap-2 border-r hairline flex-none"><span class="live-dot"></span><span class="text-[11px] font-semibold tracking-[.14em]">LAGE</span></div>
+    <div class="ticker flex-1 overflow-hidden py-2.5 text-[12px]"><div class="ticker-track" id="ticker"></div></div>
+  </div>
+</footer>
+
+<div id="tooltip" class="glass glass-strong rounded-xl px-3 py-2 text-[12px]"></div>
+<div id="toast" class="glass glass-strong rounded-xl px-4 py-2.5 text-[12.5px] flex items-center gap-2"></div>
+
+<!-- ================= SCHWEIZ-ANSICHT ================= -->
+<section id="swissView" class="fixed inset-0 z-50" style="background:rgba(6,6,8,.84);backdrop-filter:blur(10px)">
+  <div class="inner h-full flex flex-col p-4 gap-3">
+    <div class="glass rounded-2xl px-5 py-3 flex items-center gap-4 flex-wrap">
+      <svg viewBox="0 0 32 32" width="34" height="34" class="flex-none"><rect width="32" height="32" rx="7" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>
+      <div class="leading-tight">
+        <div class="text-lg font-semibold tracking-wide">Schweiz-Ansicht <span class="muted font-normal text-sm">· Confoederatio Helvetica</span></div>
+        <div class="text-[11px] muted">Neutralität · EU-Paket · Bundesrat · Abstimmungen · Lage-Radar · Stand <span id="chStand"></span></div>
+      </div>
+      <div class="flex-1"></div>
+      <div class="flex gap-2 flex-wrap" id="chHeaderChips"></div>
+      <button class="btn" id="swissClose"><i data-lucide="x"></i>Schliessen</button>
+    </div>
+    <div class="flex-1 grid gap-3 min-h-0" id="swissGrid" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
+      <div class="glass rounded-2xl relative overflow-hidden min-h-[340px]">
+        <div id="swissMap" class="absolute inset-0"></div>
+        <div class="absolute top-3 left-3 glass glass-strong rounded-xl p-2.5 z-10 w-[236px]" id="chMapCtrl">
+          <div class="text-[10px] uppercase tracking-[.14em] muted mb-1.5">Kantons-Indikator</div>
+          <div class="seg w-full" id="chIndicatorSeg">
+            <button data-ind="pop" class="on flex-1 justify-center">Bevölk.</button>
+            <button data-ind="unemp" class="flex-1 justify-center">ALQ</button>
+            <button data-ind="lang" class="flex-1 justify-center">Sprache</button>
+          </div>
+          <div id="chLegend" class="mt-2 text-[10.5px]"></div>
+          <div class="text-[10px] uppercase tracking-[.14em] muted mt-3 mb-1.5 hide-sm">Standorte</div>
+          <div id="chPoiFilters" class="flex flex-wrap gap-1 hide-sm"></div>
+        </div>
+        <div id="cantonCard" class="absolute bottom-3 left-3 right-3 md:right-auto md:w-[330px] glass glass-strong rounded-xl p-3 z-10 hidden fade-in"></div>
+      </div>
+      <div class="scroll space-y-3 pr-1 min-h-0">
+        <div class="grid grid-cols-3 gap-2" id="chIndicators"></div>
+        <div class="card ch" id="chRadar"></div>
+        <div class="card" id="chGov"></div>
+        <div class="card" id="chBilateral"></div>
+        <div class="card" id="chNeutrality"></div>
+        <div class="card" id="chForeign"></div>
+        <div class="card" id="chVotes"></div>
+        <div class="card" id="chSources"></div>
+      </div>
+    </div>
+    <div class="glass rounded-2xl flex items-center overflow-hidden">
+      <div class="px-3 py-2.5 flex items-center gap-2 border-r hairline flex-none"><span class="live-dot" style="background:var(--ch)"></span><span class="text-[11px] font-semibold tracking-[.14em]">CH-NEWS</span></div>
+      <div class="ticker flex-1 overflow-hidden py-2.5 text-[12px]"><div class="ticker-track" id="chTicker" style="animation-duration:80s"></div></div>
+    </div>
+  </div>
+</section>
+
+<script>
+/* =====================================================================
+   SWISS STRATEGIC CENTER
+   1. CONFIG & Konstanten   2. DataService   3. Hilfsfunktionen
+   4. Weltkarte (MapLibre, Mercator <-> Globus, Basiskarten, Zonen, Ereignisse)
+   5. UI (Tracker, CH-Radar, Sidebar, Legende, Ticker, Suche)
+   6. Schweiz-Modus
+   ===================================================================== */
+
+/* ============================ 1. CONFIG ============================ */
+const ESRI = (svc) => [`https://server.arcgisonline.com/ArcGIS/rest/services/${svc}/MapServer/tile/{z}/{y}/{x}`];
+const CONFIG = {
+  countriesUrl: 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_50m_admin_0_countries.geojson',
+  countriesFallbackUrl: 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_110m_admin_0_countries.geojson',
+  swissTopoUrl: 'https://cdn.jsdelivr.net/npm/swiss-maps@4.5.0/2023/ch-combined.json',
+  deepStateUrl: 'https://deepstatemap.live/api/history/last',
+  updateScript: 'data/update.js',
+  updateEveryMs: 10 * 60 * 1000,   // Lage-Update nachladen
+  frontEveryMs: 30 * 60 * 1000,    // Ukraine-Front neu abrufen
+  eventMaxDays: 14,                // Taktische Kartenpunkte verfallen nach 14 Tagen
+  newsMaxDays: 14,                 // Schlagzeilen & Lageberichte verfallen nach 14 Tagen
+  attribution: 'Tiles © Esri, Maxar, Earthstar, HERE, Garmin, © OSM · Natural Earth · DeepStateMap · swisstopo/BFS',
+};
+const BASEMAPS = {
+  auto:     { label: 'Auto', sw: 'linear-gradient(90deg,#1b1d22 50%,#3b5b3a 50%)', desc: 'Dunkel → Satellit beim Zoomen' },
+  dark:     { label: 'Dunkel', sw: '#1b1d22' },
+  satellit: { label: 'Satellit', sw: 'linear-gradient(135deg,#2f4a2a,#6b5d3e,#1e3a5a)' },
+  topo:     { label: 'Topo', sw: 'linear-gradient(135deg,#e9e3d3,#b9d3a5,#a9c9e6)' },
+  relief:   { label: 'Relief', sw: 'linear-gradient(135deg,#2a2a2a,#555,#222)' },
+};
+
+const INTENSITY_COLORS = { 1: '#ffd166', 2: '#ffb547', 3: '#ff8a4c', 4: '#ff5a5f', 5: '#ff2d6f' };
+const INTENSITY_LABEL = { 1: 'Niedrig', 2: 'Spannung', 3: 'Mittel', 4: 'Hoch', 5: 'Krieg' };
+const ZONE_STATUS = {
+  besetzt:      { label: 'Besetzt (Ukraine, live)', color: '#e0002a' },
+  grauzone:     { label: 'Grauzone / umkämpft', color: '#b8a9a9' },
+  kampf:        { label: 'Aktive Kämpfe', color: '#ff3355' },
+  kontrolle:    { label: 'Kontrolle nichtstaatl. Akteur', color: '#c04dff' },
+  spannung:     { label: 'Angriffe / Spannung', color: '#ffaa33' },
+  separatisten: { label: 'Russisch gestützte Separatisten', color: '#b0446b' },
+  epidemie:     { label: 'Epidemie-Gebiet', color: '#39d98a' },
+};
+const EVENT_TYPES = {
+  flughafen: { label: 'Flughafen getroffen', color: '#ff1f3d', r: 7.5 },
+  luft:      { label: 'Luft-/Raketenangriff', color: '#ff4d4d', r: 5.5 },
+  drohne:    { label: 'Drohnenangriff', color: '#ff7a45', r: 5.5 },
+  schiff:    { label: 'Schiff angegriffen', color: '#4dc3ff', r: 5.5 },
+  gefecht:   { label: 'Gefecht / Einnahme', color: '#ff9f1a', r: 5.5 },
+  anschlag:  { label: 'Anschlag / Massaker', color: '#ffd23f', r: 5.5 },
+  unruhen:   { label: 'Unruhen', color: '#f472b6', r: 5.5 },
+  epidemie:  { label: 'Ebola', color: '#39d98a', r: 5.5 },
+  abfang:    { label: 'Abfang / Abschuss', color: '#94a3b8', r: 4.5 },
+};
+
+// Multilaterale Blöcke (vereinfachtes Analysemodell)
+const BLOCS = {
+  nato:    { name: 'USA / NATO-aligned', short: 'NATO', color: '#5b9cff', desc: 'USA, nicht-EU-NATO-Staaten und enge Sicherheitspartner im Indopazifik.' },
+  eu:      { name: 'EU-aligned', short: 'EU', color: '#a78bfa', desc: 'EU-Mitgliedstaaten und Beitrittskandidaten mit klarer EU-Ausrichtung.' },
+  china:   { name: 'China-aligned', short: 'CN', color: '#ff6b8b', desc: 'Enge wirtschaftliche/politische Anbindung an Peking.' },
+  russia:  { name: 'Russland/Iran-Achse', short: 'RU', color: '#ffa94d', desc: 'Militärische oder politische Kooperation mit Moskau bzw. Teheran.' },
+  nonal:   { name: 'Non-Aligned / Multivektoral', short: 'NA', color: '#2dd4bf', desc: 'Multivektorale Aussenpolitik (u. a. BRICS, Golfstaaten, Globaler Süden).' },
+  neutral: { name: 'Neutral', short: 'N', color: '#f8fafc', desc: 'Dauernd neutrale Staaten (Schweiz, Liechtenstein).' },
+};
+const BLOC_MEMBERS = {
+  nato:   ['USA','CAN','GBR','NOR','ISL','TUR','ALB','MNE','MKD','JPN','KOR','AUS','NZL','ISR','TWN','PHL','GRL','PRI','GUM'],
+  eu:     ['AUT','BEL','BGR','HRV','CYP','CZE','DNK','EST','FIN','FRA','DEU','GRC','HUN','IRL','ITA','LVA','LTU','LUX','MLT','NLD','POL','PRT','ROU','SVK','SVN','ESP','SWE','UKR','MDA','BIH','KOS','AND','MCO','SMR','VAT','ALD','FRO'],
+  china:  ['CHN','PAK','KHM','LAO','MMR','SLB','HKG','MAC'],
+  russia: ['RUS','BLR','PRK','IRN','CUB','NIC','MLI','BFA','NER','CAF','ERI','GEO'],
+  neutral:['CHE','LIE'],
+};
+const BLOC_OF = {};
+Object.entries(BLOC_MEMBERS).forEach(([b, list]) => list.forEach(c => BLOC_OF[c] = b));
+const blocOf = (iso) => BLOC_OF[iso] || 'nonal';
+
+/* ========================= 2. DataService ========================== */
+let CONFLICTS = window.CONFLICTS || [];
+let EVENTS = window.EVENTS || [];
+let NEWS = window.NEWS || [];
+const COUNTRIES = window.COUNTRIES || {};
+const SWISS = window.SWISS;
+const LS_KEY = 'ssc-user-updates';
+const DataService = {
+  stamp: new Date('2026-10-25T12:00:00'),
+  userUpdates() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; } },
+  addUserUpdate(id, text) {
+    const all = this.userUpdates();
+    (all[id] = all[id] || []).unshift({ date: new Date().toISOString().slice(0, 10), text, tag: 'Eigene Notiz', user: true });
+    try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch {}
+  },
+  updatesFor(c) { return [...(this.userUpdates()[c.id] || []), ...(c.updates || [])]; },
+  // Lage-Update (Schema siehe data/update.js) zusammenführen – idempotent, darf beliebig oft angewendet werden
+  lastApplied: null,
+  applyUpdate(u) {
+    if (!u || !u.updated || u.updated === this.lastApplied) return false;
+    this.lastApplied = u.updated;
+    if (new Date(u.updated) > this.stamp) this.stamp = new Date(u.updated);
+
+    // 1. Veraltete / beendete Konflikte (z. B. unrest) dauerhaft bereinigen
+    CONFLICTS = CONFLICTS.filter(c => c.id !== 'unrest');
+    if (window.CH_IMPACT) delete window.CH_IMPACT.unrest;
+
+    const maxDays = CONFIG.eventMaxDays || 14;
+    const maxNewsDays = CONFIG.newsMaxDays || 14;
+
+    (u.conflicts || []).forEach(n => {
+      if (n.id === 'unrest') return;
+      const c = CONFLICTS.find(x => x.id === n.id);
+      if (!c) { if (n.name && n.center) CONFLICTS.push({ parties: [], countries: [], updates: [], intensity: 2, type: 'Krise', region: '', since: '', ...n }); return; }
+      const { updates, ...rest } = n;
+      Object.assign(c, rest);
+      if (updates?.length) {
+        const seen = new Set((c.updates || []).map(x => x.date + x.text));
+        c.updates = [...updates.filter(x => !seen.has(x.date + x.text)), ...(c.updates || [])]
+          .filter(x => daysAgo(x.date) <= maxNewsDays)
+          .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      }
+    });
+
+    // 2. Veraltete Ereignisse entfernen & nur frische Ereignisse (<= 14 Tage) behalten
+    EVENTS = EVENTS.filter(e => e.c !== 'unrest' && daysAgo(e.d) <= maxDays);
+    const seenEv = new Set(EVENTS.map(e => e.title + e.d));
+    (u.events || []).forEach(e => {
+      if (e.c !== 'unrest' && Array.isArray(e.coords) && daysAgo(e.d) <= maxDays && !seenEv.has(e.title + e.d)) {
+        EVENTS.push(e);
+        seenEv.add(e.title + e.d);
+      }
+    });
+    EVENTS.sort((a, b) => (b.d || '').localeCompare(a.d || ''));
+
+    if (u.news?.length) NEWS = u.news.filter(n => n.c !== 'unrest');
+    Object.entries(u.countries || {}).forEach(([iso, o]) => {
+      const base = COUNTRIES[iso] || {};
+      const baseNow = base._baseNow || base.now || [];
+      const merged = { ...base, ...o, _baseNow: baseNow };
+      // Neue «Aktuell»-Punkte zuerst, kuratierte Basispunkte dahinter behalten
+      if (o.now) merged.now = [...o.now, ...baseNow.filter(x => !o.now.includes(x))].slice(0, 8);
+      COUNTRIES[iso] = merged;
+    });
+    Object.entries(u.swiss || {}).forEach(([k, v]) => { if (v != null) SWISS[k] = v; });
+    Object.entries(u.chImpact || {}).forEach(([k, v]) => { if (k !== 'unrest') (window.CH_IMPACT = window.CH_IMPACT || {})[k] = v; });
+    return true;
+  },
+  export() {
+    const blob = new Blob([JSON.stringify({ updated: new Date().toISOString(), conflicts: CONFLICTS, events: EVENTS, news: NEWS }, null, 2)], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `ssc-lage-${new Date().toISOString().slice(0, 10)}.json` });
+    a.click(); URL.revokeObjectURL(a.href);
+  },
+};
+
+/* ===================== 3. Hilfsfunktionen ========================== */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+const nf = new Intl.NumberFormat('de-CH');
+const fmtPop = (n) => n >= 1e9 ? (n / 1e9).toFixed(2) + ' Mrd.' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' Mio.' : nf.format(n);
+const fmtGdp = (md) => md >= 1e6 ? (md / 1e6).toFixed(2) + ' Bio. USD' : md >= 1e3 ? Math.round(md / 1e3) + ' Mrd. USD' : md + ' Mio. USD';
+const flag = (a2, h = 14) => (a2 && /^[A-Z]{2}$/.test(a2)) ? `<img src="https://flagcdn.com/h40/${a2.toLowerCase()}.png" alt="${a2}" style="height:${h}px;width:auto;border-radius:2px;display:inline-block;vertical-align:middle;box-shadow:0 0 0 1px rgba(255,255,255,.12)" loading="lazy">` : '<span class="muted">◻</span>';
+const icons = () => window.lucide && lucide.createIcons();
+const fmtDate = (d) => { if (!d) return ''; const p = d.split('-'); return p.length === 3 ? `${+p[2]}.${+p[1]}.${p[0]}` : p.length === 2 ? `${['', 'Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.'][+p[1]]} ${p[0]}` : d; };
+const daysAgo = (d) => { if (!d || d.length < 10) return 999; return Math.floor((DataService.stamp - new Date(d + 'T12:00:00')) / 864e5); };
+const intensityBars = (n) => `<span class="intensity">${[1, 2, 3, 4, 5].map(i => `<i style="${i <= n ? `background:${INTENSITY_COLORS[n]}` : ''}"></i>`).join('')}</span>`;
+const meter = (n, color) => `<span class="meter">${[1, 2, 3, 4, 5].map(i => `<i style="${i <= n ? `background:${color}` : ''}"></i>`).join('')}</span>`;
+const RISK_COL = { 1: '#3ee6a8', 2: '#a3e635', 3: '#ffb547', 4: '#ff7a45', 5: '#ff2d6f' };
+const RISK_TXT = { 1: 'Stabil', 2: 'Leicht erhöht', 3: 'Erhöht', 4: 'Hoch', 5: 'Kritisch' };
+const CONTINENT_DE = { 'Africa': 'Afrika', 'Asia': 'Asien', 'Europe': 'Europa', 'North America': 'Nordamerika', 'South America': 'Südamerika', 'Oceania': 'Ozeanien', 'Antarctica': 'Antarktis', 'Seven seas (open ocean)': 'Ozeane' };
+const INCOME_DE = { '1': 'Hoch (OECD)', '2': 'Hoch', '3': 'Oberes Mittel', '4': 'Unteres Mittel', '5': 'Niedrig' };
+const val = (s) => s && s !== '—' ? s : '';
+const srcLink = (u, label = 'Quelle') => (typeof u === 'string' && /^https?:\/\//.test(u)) ? `<a class="chip btnchip" style="font-size:10px" href="${esc(u)}" target="_blank" rel="noopener">${label} ↗</a>` : '';
+
+function sparkline(values, color, w = 90, h = 24) {
+  const min = Math.min(...values), max = Math.max(...values), r = max - min || 1;
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - 3 - ((v - min) / r) * (h - 6)]);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const id = 'g' + Math.random().toString(36).slice(2, 8);
+  return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><defs><linearGradient id="${id}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".35"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="${d} L ${w} ${h} L 0 ${h} Z" fill="url(#${id})"/><path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/><circle cx="${pts.at(-1)[0]}" cy="${pts.at(-1)[1]}" r="2.4" fill="${color}"/></svg>`;
+}
+const polysOf = (g) => g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+function inRing([x, y], ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+const inGeom = (pt, g) => polysOf(g).some(p => inRing(pt, p[0]) && !p.slice(1).some(h => inRing(pt, h)));
+function minDist(pt, g) {
+  let best = Infinity;
+  polysOf(g).forEach(p => { const r = p[0]; for (let i = 0; i < r.length; i += 3) { const dx = r[i][0] - pt[0], dy = r[i][1] - pt[1]; best = Math.min(best, dx * dx + dy * dy); } });
+  return best;
+}
+
+/* ========================= 4. WELTKARTE ============================ */
+const state = {
+  projection: 'mercator', basemap: 'auto',
+  layers: { conflicts: true, zones: true, events: true, ukraine: true, heatmap: false, blocs: false, labels: true, graticule: true, rotate: true },
+  filter: 0, leftTab: 'conf', newsFilter: 'all', newsSearch: '', stratSection: '5gen',
+  selectedCountry: null, selectedConflict: null, hoverId: null,
+  countries: null, byIso: {}, neighbors: {}, eventCountry: [], uaStamp: null,
+};
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    projection: { type: 'mercator' },
+    sky: { 'sky-color': '#05070c', 'horizon-color': '#0e2a3a', 'fog-color': '#0a0a0a', 'sky-horizon-blend': .6, 'horizon-fog-blend': .4, 'fog-ground-blend': .6, 'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0] },
+    sources: {
+      dark:   { type: 'raster', tiles: ESRI('Canvas/World_Dark_Gray_Base'), tileSize: 256, maxzoom: 16, attribution: CONFIG.attribution },
+      darkRef:{ type: 'raster', tiles: ESRI('Canvas/World_Dark_Gray_Reference'), tileSize: 256, maxzoom: 16 },
+      sat:    { type: 'raster', tiles: ESRI('World_Imagery'), tileSize: 256, maxzoom: 18 },
+      satRef: { type: 'raster', tiles: ESRI('Reference/World_Boundaries_and_Places'), tileSize: 256, maxzoom: 18 },
+      topo:   { type: 'raster', tiles: ESRI('World_Topo_Map'), tileSize: 256, maxzoom: 18 },
+      relief: { type: 'raster', tiles: ESRI('Elevation/World_Hillshade_Dark'), tileSize: 256, maxzoom: 16 },
+    },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': '#0a0a0a' } },
+      { id: 'bm-dark', type: 'raster', source: 'dark', paint: { 'raster-opacity': 1, 'raster-brightness-min': 0.05 } },
+      { id: 'bm-relief', type: 'raster', source: 'relief', layout: { visibility: 'none' } },
+      { id: 'bm-sat', type: 'raster', source: 'sat', paint: { 'raster-opacity': 0 } },
+      { id: 'bm-topo', type: 'raster', source: 'topo', layout: { visibility: 'none' } },
+    ],
+  },
+  center: [25, 27], zoom: 1.9, minZoom: 1, maxZoom: 14,
+  attributionControl: { compact: true },
+});
+map.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
+map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
+
+function graticule(step = 15) {
+  const f = [];
+  for (let lng = -180; lng <= 180; lng += step) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: Array.from({ length: 33 }, (_, i) => [lng, -80 + i * 5]) } });
+  for (let lat = -75; lat <= 75; lat += step) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: Array.from({ length: 73 }, (_, i) => [-180 + i * 5, lat]) } });
+  return { type: 'FeatureCollection', features: f };
+}
+const visibleConflicts = () => CONFLICTS.filter(c => c.id !== 'unrest' && c.intensity >= state.filter);
+function conflictPoints() {
+  return { type: 'FeatureCollection', features: visibleConflicts().map(c => ({ type: 'Feature', properties: { id: c.id, intensity: c.intensity }, geometry: { type: 'Point', coordinates: c.center } })) };
+}
+function zoneData() {
+  const ids = new Set(visibleConflicts().map(c => c.id));
+  return { type: 'FeatureCollection', features: (window.ZONES?.zones.features || []).filter(f => ids.has(f.properties.cid)) };
+}
+function eventData() {
+  const ids = new Set(visibleConflicts().map(c => c.id));
+  const maxDays = CONFIG.eventMaxDays || 14;
+  return { type: 'FeatureCollection', features: EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => ids.has(e.c) && e.c !== 'unrest' && daysAgo(e.d) <= maxDays).map(({ e, i }) => ({
+    type: 'Feature', properties: { i, t: e.t, recent: daysAgo(e.d) <= 7 ? 1 : 0, r: (EVENT_TYPES[e.t] || EVENT_TYPES.luft).r }, geometry: { type: 'Point', coordinates: e.coords } })) };
+}
+function blocColorExpr() {
+  const pairs = []; Object.entries(BLOC_OF).forEach(([iso, b]) => pairs.push(iso, BLOCS[b].color));
+  return ['match', ['get', 'ADM0_A3'], ...pairs, BLOCS.nonal.color];
+}
+function computeNeighbors(fc) {
+  const owner = new Map(), nb = {};
+  fc.features.forEach(f => {
+    const iso = f.properties.ADM0_A3; nb[iso] = nb[iso] || new Set();
+    polysOf(f.geometry).forEach(p => p.forEach(ring => ring.forEach(([x, y]) => {
+      const k = x.toFixed(3) + ',' + y.toFixed(3), o = owner.get(k);
+      if (o === undefined) owner.set(k, iso); else if (o !== iso) { nb[iso].add(o); (nb[o] = nb[o] || new Set()).add(iso); }
+    })));
+  });
+  return nb;
+}
+// Ereignisse den Ländern zuordnen (Punkt-in-Polygon; Seeereignisse zum nächsten beteiligten Staat)
+function assignEventCountries() {
+  state.eventCountry = EVENTS.map(e => {
+    const hit = state.countries.features.find(f => inGeom(e.coords, f.geometry));
+    if (hit) return hit.properties.ADM0_A3;
+    const conf = CONFLICTS.find(c => c.id === e.c);
+    const cands = (conf?.countries || []).map(i => state.byIso[i]).filter(Boolean);
+    let best = null, bd = Infinity;
+    cands.forEach(f => { const d = minDist(e.coords, f.geometry); if (d < bd) { bd = d; best = f.properties.ADM0_A3; } });
+    return best;
+  });
+}
+async function loadCountries() {
+  for (const url of [CONFIG.countriesUrl, CONFIG.countriesFallbackUrl]) { try { const r = await fetch(url); if (r.ok) return await r.json(); } catch {} }
+  throw new Error('Länderdaten konnten nicht geladen werden');
+}
+
+// Ukraine: DeepStateMap live (Fallback: eingebetteter Snapshot)
+const DS_KEEP = { 'geoJSON.status.occupied': 'besetzt', 'geoJSON.status.unknown': 'grauzone', 'geoJSON.territories.crimea': 'besetzt', 'geoJSON.territories.ordlo': 'besetzt', 'geoJSON.territories.tuzla': 'besetzt', 'geoJSON.territories.transnistria': 'separatisten', 'geoJSON.territories.abkhazia': 'separatisten', 'geoJSON.territories.tskhinvali-district': 'separatisten' };
+async function loadUkraine() {
+  const chip = $('#uaLiveChip');
+  try {
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 12000);
+    const r = await fetch(CONFIG.deepStateUrl, { signal: ctl.signal });
+    const d = await r.json();
+    const feats = d.map.features.filter(f => f.geometry.type === 'Polygon').map(f => {
+      const key = Object.keys(DS_KEEP).find(k => (f.properties.name || '').includes(k));
+      return key ? { type: 'Feature', properties: { status: DS_KEEP[key] }, geometry: { type: 'Polygon', coordinates: [f.geometry.coordinates[0].map(c => [c[0], c[1]])] } } : null;
+    }).filter(Boolean);
+    if (!feats.length) throw new Error('leer');
+    map.getSource('ua')?.setData({ type: 'FeatureCollection', features: feats });
+    state.uaStamp = 'live · Stand ' + (d.datetime ? d.datetime.replace(' o ', ', ') : new Date(d.id * 1000).toLocaleString('de-CH'));
+    chip.textContent = 'Front: live'; chip.style.color = 'var(--green)';
+  } catch {
+    state.uaStamp = 'Snapshot ' + (window.ZONES?.generated || '');
+    chip.textContent = 'Front: Snapshot'; chip.style.color = 'var(--amber)';
+  }
+}
+
+map.on('load', async () => {
+  try {
+    $('#loaderMsg').textContent = 'Lade Ländergeometrien (Natural Earth 1:50 Mio.) …';
+    const fc = await loadCountries();
+    fc.features = fc.features.filter(f => f.properties.ADM0_A3 !== 'ATA');
+    state.countries = fc;
+    fc.features.forEach(f => state.byIso[f.properties.ADM0_A3] = f);
+    $('#loaderMsg').textContent = 'Berechne Nachbarschaften und Ereignis-Zuordnung …';
+    await new Promise(r => setTimeout(r, 20));
+    state.neighbors = computeNeighbors(fc);
+    DataService.applyUpdate(window.SSC_UPDATE);
+    assignEventCountries();
+
+    const zFade = (lo, hi) => ['interpolate', ['linear'], ['zoom'], 2, lo, 6, hi];
+    map.addSource('graticule', { type: 'geojson', data: graticule() });
+    map.addLayer({ id: 'graticule', type: 'line', source: 'graticule', paint: { 'line-color': '#5ee7ff', 'line-opacity': zFade(.07, 0), 'line-width': .6 } });
+
+    map.addSource('countries', { type: 'geojson', data: fc, promoteId: 'ADM0_A3' });
+    map.addLayer({ id: 'countries-fill', type: 'fill', source: 'countries', paint: { 'fill-color': '#1a1f2b', 'fill-color-transition': { duration: 500 } } });
+    map.addLayer({ id: 'countries-line', type: 'line', source: 'countries', paint: { 'line-color': '#c9d6e3', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 2, .25, 6, .55], 'line-width': ['interpolate', ['linear'], ['zoom'], 2, .6, 7, 1.4] } });
+
+    // Präzise Konfliktzonen (Provinzgrenzen) + Ukraine-Front
+    map.addSource('zones', { type: 'geojson', data: zoneData() });
+    map.addSource('ua', { type: 'geojson', data: window.ZONES?.ukraineSnapshot || { type: 'FeatureCollection', features: [] } });
+    const zColor = ['match', ['get', 'status'], ...Object.entries(ZONE_STATUS).flatMap(([k, v]) => [k, v.color]), '#ff3355'];
+    map.addLayer({ id: 'zones-fill', type: 'fill', source: 'zones', paint: { 'fill-color': zColor, 'fill-opacity': zFade(.32, .2) } });
+    map.addLayer({ id: 'zones-line', type: 'line', source: 'zones', paint: { 'line-color': zColor, 'line-width': ['interpolate', ['linear'], ['zoom'], 2, .6, 7, 1.6], 'line-opacity': .85 } });
+    map.addLayer({ id: 'ua-fill', type: 'fill', source: 'ua', paint: { 'fill-color': zColor, 'fill-opacity': zFade(.45, .3) } });
+    map.addLayer({ id: 'ua-line', type: 'line', source: 'ua', paint: { 'line-color': zColor, 'line-width': ['interpolate', ['linear'], ['zoom'], 3, .6, 8, 2] } });
+
+    // Beschriftungen (Städte, Grenzen) über den Flächen
+    map.addLayer({ id: 'lbl-dark', type: 'raster', source: 'darkRef', paint: { 'raster-opacity': 1 } });
+    map.addLayer({ id: 'lbl-sat', type: 'raster', source: 'satRef', paint: { 'raster-opacity': 0 } });
+
+    map.addLayer({ id: 'countries-hover', type: 'line', source: 'countries', paint: {
+      'line-color': ['case', ['boolean', ['feature-state', 'selected'], false], '#5ee7ff', '#ffffff'],
+      'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 2.2, ['boolean', ['feature-state', 'hover'], false], 1.3, 0] } });
+    // Schweiz immer hervorgehoben
+    map.addLayer({ id: 'ch-glow', type: 'line', source: 'countries', filter: ['==', ['get', 'ADM0_A3'], 'CHE'], paint: { 'line-color': '#ff2d3a', 'line-width': 6, 'line-blur': 4, 'line-opacity': .8 } });
+    map.addLayer({ id: 'ch-line', type: 'line', source: 'countries', filter: ['==', ['get', 'ADM0_A3'], 'CHE'], paint: { 'line-color': '#ff5a63', 'line-width': 1.6 } });
+
+    // Konflikt-Hubs (Heatmap + Puls) und getroffene Orte
+    map.addSource('c-points', { type: 'geojson', data: conflictPoints() });
+    map.addSource('events', { type: 'geojson', data: eventData() });
+    const iColor = ['match', ['get', 'intensity'], 1, INTENSITY_COLORS[1], 2, INTENSITY_COLORS[2], 3, INTENSITY_COLORS[3], 4, INTENSITY_COLORS[4], INTENSITY_COLORS[5]];
+    map.addLayer({ id: 'c-heat', type: 'heatmap', source: 'c-points', layout: { visibility: 'none' }, paint: {
+      'heatmap-weight': ['/', ['get', 'intensity'], 5], 'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 1, 40, 6, 120],
+      'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'], 0, 'rgba(0,0,0,0)', .2, 'rgba(255,181,71,.25)', .5, 'rgba(255,90,95,.45)', 1, 'rgba(255,45,111,.7)'], 'heatmap-opacity': .8 } });
+    const eColor = ['match', ['get', 't'], ...Object.entries(EVENT_TYPES).flatMap(([k, v]) => [k, v.color]), '#ff4d4d'];
+    map.addLayer({ id: 'ev-halo', type: 'circle', source: 'events', filter: ['==', ['get', 'recent'], 1], paint: { 'circle-color': eColor, 'circle-radius': 12, 'circle-opacity': .3, 'circle-blur': .4, 'circle-pitch-alignment': 'map' } });
+    map.addLayer({ id: 'ev-core', type: 'circle', source: 'events', paint: {
+      'circle-color': eColor, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, ['*', ['get', 'r'], .6], 6, ['*', ['get', 'r'], 1.3]],
+      'circle-stroke-color': ['case', ['==', ['get', 't'], 'flughafen'], '#ffffff', '#0a0a0a'], 'circle-stroke-width': ['case', ['==', ['get', 't'], 'flughafen'], 2, 1.2],
+      'circle-opacity': ['case', ['==', ['get', 'recent'], 1], 1, .75], 'circle-pitch-alignment': 'map' } });
+    map.addLayer({ id: 'c-halo', type: 'circle', source: 'c-points', maxzoom: 5, paint: { 'circle-color': iColor, 'circle-opacity': .25, 'circle-radius': 10, 'circle-blur': .4, 'circle-pitch-alignment': 'map' } });
+    map.addLayer({ id: 'c-core', type: 'circle', source: 'c-points', maxzoom: 5, paint: { 'circle-color': 'rgba(0,0,0,0)', 'circle-radius': ['+', 6, ['get', 'intensity']], 'circle-stroke-color': iColor, 'circle-stroke-width': 2, 'circle-pitch-alignment': 'map' } });
+
+    bindMapEvents();
+    applyBasemap();
+    applyLayerState();
+    startAnimations();
+    UI.renderAll();
+    loadUkraine();
+    LiveRefresh.start();
+    setTimeout(() => $('#loader').classList.add('hide'), 250);
+  } catch (e) {
+    console.error(e);
+    $('#loaderMsg').innerHTML = `<span style="color:var(--red)">Fehler: ${esc(e.message)}</span><br><span class="muted">Internetverbindung für Kartendienste erforderlich.</span>`;
+  }
+});
+
+// Laufende Aktualisierung: data/update.js per <script> neu laden (funktioniert auch bei Doppelklick/file://),
+// Ukraine-Front periodisch neu abrufen; beim Zurückkehren in den Tab sofort prüfen.
+const LiveRefresh = {
+  lastCheck: 0,
+  start() {
+    setInterval(() => this.reloadUpdate(), CONFIG.updateEveryMs);
+    setInterval(() => loadUkraine(), CONFIG.frontEveryMs);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - this.lastCheck > 60000) this.reloadUpdate(); });
+    this.lastCheck = Date.now();
+  },
+  reloadUpdate() {
+    this.lastCheck = Date.now();
+    const s = document.createElement('script');
+    s.src = `${CONFIG.updateScript}?t=${Date.now()}`;
+    s.onload = () => { s.remove(); if (DataService.applyUpdate(window.SSC_UPDATE)) onDataChanged(true); else UI.renderStamp(); };
+    s.onerror = () => s.remove();
+    document.head.appendChild(s);
+  },
+};
+function onDataChanged(notify) {
+  assignEventCountries(); refreshSources(); UI.renderAll();
+  if (state.selectedConflict) UI.openConflict(state.selectedConflict, false);
+  if (notify) toast(`Lage aktualisiert – Stand ${DataService.stamp.toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' })}`);
+}
+function toast(msg) {
+  const t = $('#toast'); t.innerHTML = `<span class="live-dot" style="background:var(--green)"></span>${esc(msg)}`;
+  t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 6000);
+}
+
+function applyBasemap() {
+  const b = state.basemap, z = (stops) => ['interpolate', ['linear'], ['zoom'], ...stops];
+  const vis = (id, on) => map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+  vis('bm-dark', b === 'auto' || b === 'dark'); vis('bm-sat', b === 'auto' || b === 'satellit');
+  vis('bm-topo', b === 'topo'); vis('bm-relief', b === 'relief');
+  map.setPaintProperty('bm-dark', 'raster-opacity', b === 'auto' ? z([3.5, 1, 5.5, 0]) : 1);
+  map.setPaintProperty('bm-sat', 'raster-opacity', b === 'auto' ? z([3.5, 0, 5.5, 1]) : 1);
+  const L = state.layers.labels;
+  vis('lbl-dark', L && (b === 'auto' || b === 'dark' || b === 'relief'));
+  vis('lbl-sat', L && (b === 'auto' || b === 'satellit'));
+  map.setPaintProperty('lbl-dark', 'raster-opacity', b === 'auto' ? z([3.5, 1, 5.5, 0]) : 1);
+  map.setPaintProperty('lbl-sat', 'raster-opacity', b === 'auto' ? z([3.5, 0, 5.5, 1]) : 1);
+  applyFill();
+  document.querySelectorAll('#basemapOpts .bm-opt').forEach(o => o.classList.toggle('on', o.dataset.bm === b));
+}
+function applyFill() {
+  if (!map.getLayer('countries-fill')) return;
+  const bright = state.basemap === 'topo' || state.basemap === 'satellit';
+  const sel = ['boolean', ['feature-state', 'selected'], false], hov = ['boolean', ['feature-state', 'hover'], false];
+  const op = (base, h, s) => ['case', sel, s, hov, h, base];
+  // Beim Hineinzoomen werden Flächen transparent, damit Geografie und Städte sichtbar bleiben
+  const fade = state.layers.blocs
+    ? ['interpolate', ['linear'], ['zoom'], 2, op(.5, .72, .85), 5, op(.25, .38, .45), 8, op(.12, .18, .22)]
+    : ['interpolate', ['linear'], ['zoom'], 2, op(bright ? .08 : .2, .38, .5), 5, op(.04, .15, .2), 8, op(0, .06, .1)];
+  map.setPaintProperty('countries-fill', 'fill-color', state.layers.blocs ? blocColorExpr() : (bright ? '#0b1220' : '#1a1f2b'));
+  map.setPaintProperty('countries-fill', 'fill-opacity', fade);
+}
+function applyLayerState() {
+  const L = state.layers, vis = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+  vis('graticule', L.graticule);
+  ['c-core', 'c-halo'].forEach(id => vis(id, L.conflicts));
+  ['zones-fill', 'zones-line'].forEach(id => vis(id, L.conflicts && L.zones));
+  ['ua-fill', 'ua-line'].forEach(id => vis(id, L.conflicts && L.ukraine));
+  ['ev-core', 'ev-halo'].forEach(id => vis(id, L.conflicts && L.events));
+  vis('c-heat', L.conflicts && L.heatmap);
+  applyBasemap();
+  $('#btnConflicts').classList.toggle('active', L.conflicts);
+  $('#btnBlocs').classList.toggle('active', L.blocs);
+  UI.renderLegend();
+}
+function refreshSources() {
+  map.getSource('c-points')?.setData(conflictPoints());
+  map.getSource('zones')?.setData(zoneData());
+  map.getSource('events')?.setData(eventData());
+}
+
+function bindMapEvents() {
+  const tip = $('#tooltip');
+  const showTip = (e, html) => {
+    tip.innerHTML = html; tip.classList.add('show');
+    tip.style.left = Math.min(e.originalEvent.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px';
+    tip.style.top = Math.min(e.originalEvent.clientY + 14, innerHeight - tip.offsetHeight - 8) + 'px';
+  };
+  const hideTip = () => tip.classList.remove('show');
+  const layersOn = (ids) => ids.filter(id => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none');
+
+  map.on('mousemove', (e) => {
+    const ev = map.queryRenderedFeatures(e.point, { layers: layersOn(['ev-core']) })[0];
+    if (ev) {
+      setHover(null); map.getCanvas().style.cursor = 'pointer';
+      const x = EVENTS[ev.properties.i], T = EVENT_TYPES[x.t] || EVENT_TYPES.luft;
+      return showTip(e, `<div class="flex items-center gap-2"><span class="dot" style="background:${T.color}"></span><b>${esc(x.title)}</b></div>
+        <div class="text-[11px] muted mt-0.5">${T.label} · ${fmtDate(x.d)}</div>${x.cas ? `<div class="text-[11px] mt-1" style="color:#ffb3b8">${esc(x.cas)}</div>` : ''}`);
+    }
+    const cf = map.queryRenderedFeatures(e.point, { layers: layersOn(['c-core']) })[0];
+    if (cf) {
+      setHover(null); map.getCanvas().style.cursor = 'pointer';
+      const c = CONFLICTS.find(x => x.id === cf.properties.id);
+      return showTip(e, `<div class="flex items-center gap-2"><span class="dot" style="background:${INTENSITY_COLORS[c.intensity]}"></span><b>${esc(c.name)}</b></div><div class="flex items-center gap-2 muted text-[11px] mt-0.5">${intensityBars(c.intensity)} ${INTENSITY_LABEL[c.intensity]} · ${esc(c.type)}</div><div class="text-[11px] mt-1">${esc(c.status)}</div>`);
+    }
+    const z = map.queryRenderedFeatures(e.point, { layers: layersOn(['ua-fill', 'zones-fill']) })[0];
+    const f = map.queryRenderedFeatures(e.point, { layers: ['countries-fill'] })[0];
+    if (f) {
+      const p = f.properties, iso = p.ADM0_A3, b = BLOCS[blocOf(iso)], d = COUNTRIES[iso];
+      setHover(iso); map.getCanvas().style.cursor = 'pointer';
+      const zs = z ? ZONE_STATUS[z.properties.status] : null;
+      showTip(e, `<div class="flex items-center gap-2">${flag(p.ISO_A2_EH || p.ISO_A2)}<b>${esc(p.NAME_DE || p.NAME)}</b></div>
+        <div class="flex items-center gap-1.5 mt-1 text-[11px] muted"><span class="dot" style="background:${b.color}"></span>${b.name}</div>
+        ${d ? `<div class="flex items-center gap-2 mt-1 text-[11px]"><span class="muted">Lage</span>${meter(d.r, RISK_COL[d.r])}<span class="muted ml-1">CH</span>${meter(d.x, '#ff2d3a')}</div>` : ''}
+        ${zs ? `<div class="text-[11px] mt-1.5 pt-1.5 border-t hairline"><span class="dot" style="background:${zs.color}"></span> ${esc(z.properties.label || zs.label)}${z.properties.name ? ` · ${esc(z.properties.name)}` : ''}</div>` : ''}`);
+    } else { setHover(null); map.getCanvas().style.cursor = ''; hideTip(); }
+  });
+  map.on('mouseout', () => { setHover(null); hideTip(); });
+  map.on('click', (e) => {
+    const ev = map.queryRenderedFeatures(e.point, { layers: layersOn(['ev-core']) })[0];
+    if (ev) return UI.openEvent(ev.properties.i);
+    const cf = map.queryRenderedFeatures(e.point, { layers: layersOn(['c-core']) })[0];
+    if (cf) return UI.openConflict(cf.properties.id, false);
+    const f = map.queryRenderedFeatures(e.point, { layers: ['countries-fill'] })[0];
+    if (f) UI.openCountry(f.properties.ADM0_A3, false);
+  });
+
+  // Autorotation pausiert bei jeder Benutzereingabe sofort und läuft erst nach 6 s Ruhe weiter
+  const canvas = map.getCanvasContainer(), touch = () => { state.lastInteract = performance.now(); };
+  ['pointerdown', 'mousedown', 'touchstart'].forEach(ev => canvas.addEventListener(ev, () => { state.pointerDown = true; touch(); }, { passive: true }));
+  ['pointerup', 'mouseup', 'touchend', 'touchcancel'].forEach(ev => addEventListener(ev, () => { state.pointerDown = false; touch(); }, { passive: true }));
+  canvas.addEventListener('wheel', touch, { passive: true });
+  ['movestart', 'move'].forEach(ev => map.on(ev, (e) => { if (e.originalEvent) touch(); }));
+}
+function setHover(iso) {
+  if (state.hoverId === iso) return;
+  if (state.hoverId) map.setFeatureState({ source: 'countries', id: state.hoverId }, { hover: false });
+  state.hoverId = iso;
+  if (iso) map.setFeatureState({ source: 'countries', id: iso }, { hover: true });
+}
+function setSelected(iso) {
+  if (state.selectedCountry) map.setFeatureState({ source: 'countries', id: state.selectedCountry }, { selected: false });
+  state.selectedCountry = iso;
+  if (iso) map.setFeatureState({ source: 'countries', id: iso }, { selected: true });
+}
+function setProjection(type) {
+  if (type === state.projection) return;
+  state.projection = type;
+  document.querySelectorAll('#projSeg button').forEach(b => b.classList.toggle('on', b.dataset.proj === type));
+  $('#projFade').classList.add('on');
+  setTimeout(() => {
+    map.setProjection({ type });
+    if (type === 'globe' && map.getZoom() > 3) map.easeTo({ zoom: 2.2, duration: 600 });
+    requestAnimationFrame(() => $('#projFade').classList.remove('on'));
+  }, 260);
+}
+function startAnimations() {
+  const t0 = performance.now(); let last = 0;
+  function frame(now) {
+    if (now - last > 60 && map.getLayer('c-halo')) {
+      last = now;
+      const p = ((now - t0) % 2000) / 2000;
+      map.setPaintProperty('c-halo', 'circle-radius', ['+', ['*', ['get', 'intensity'], 2 + p * 4], 8]);
+      map.setPaintProperty('c-halo', 'circle-opacity', .4 * (1 - p));
+      map.setPaintProperty('ev-halo', 'circle-radius', 6 + p * 12);
+      map.setPaintProperty('ev-halo', 'circle-opacity', .45 * (1 - p));
+    }
+    const idle = !state.pointerDown && now - (state.lastInteract || 0) > 6000 && !$('#sidebar').classList.contains('open');
+    if (state.projection === 'globe' && state.layers.rotate && idle && !map.isMoving() && map.getZoom() < 3.5 && !$('#swissView').classList.contains('open')) {
+      const c = map.getCenter(); map.setCenter([c.lng + .03, c.lat]);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+function bbox(f) {
+  const iso = f.properties.ADM0_A3;
+  const fixed = { RUS: [[27, 41], [180, 78]], USA: [[-125, 24], [-66, 50]], FRA: [[-5, 41.3], [9.6, 51.2]], NLD: [[3.3, 50.7], [7.3, 53.6]], NOR: [[4.5, 57.9], [31.5, 71.3]], CHL: [[-76, -56], [-66, -17]], NZL: [[166, -47.5], [179, -34]], FJI: [[177, -19.2], [180, -16]], KIR: [[172, -2], [177, 3]] };
+  if (fixed[iso]) return fixed[iso];
+  let minX = 180, minY = 90, maxX = -180, maxY = -90;
+  polysOf(f.geometry).forEach(p => p[0].forEach(([x, y]) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }));
+  return [[minX, minY], [maxX, maxY]];
+}
+
+/* ============================ 5. UI ================================ */
+const LIVE_LINKS = (nameDe) => [
+  ['SRF News', `https://www.srf.ch/suche?q=${encodeURIComponent(nameDe)}`],
+  ['NZZ', `https://www.nzz.ch/suche?q=${encodeURIComponent(nameDe)}`],
+  ['swissinfo', `https://www.swissinfo.ch/ger/suche?q=${encodeURIComponent(nameDe)}`],
+  ['Google News CH', `https://news.google.com/search?q=${encodeURIComponent(nameDe)}&hl=de&gl=CH&ceid=CH:de`],
+  ['EDA-Reisehinweise', 'https://www.eda.admin.ch/eda/de/home/vertretungen-und-reisehinweise.html'],
+];
+
+const UI = {
+  renderAll() {
+    this.renderLeft(); this.renderTicker(); this.renderLegend(); this.renderLayerPop(); this.renderStamp();
+    if ($('#swissView').classList.contains('open')) Swiss.render();
+    icons();
+  },
+  renderStamp() {
+    $('#dataStamp').textContent = DataService.stamp.toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
+    $('#dataStamp').title = `Auto-Update aktiv · zuletzt geprüft ${new Date(LiveRefresh.lastCheck || Date.now()).toLocaleTimeString('de-CH')}`;
+  },
+
+  // ---------- Linkes Panel ----------
+  renderLeft() {
+    document.querySelectorAll('#leftTabs button').forEach(b => b.classList.toggle('on', b.dataset.lt === state.leftTab));
+    if (state.leftTab === 'conf') this.renderTracker();
+    else if (state.leftTab === 'news') this.renderNews();
+    else if (state.leftTab === 'strat') this.renderStrategy();
+    else this.renderRadar();
+    icons();
+  },
+
+  getAllHeadlines() {
+    const list = [];
+    const seen = new Set();
+
+    // 1. Live Ticker / Schlagzeilen
+    (NEWS || []).forEach((n, idx) => {
+      if (n.c === 'unrest') return;
+      const key = (n.tag || '') + '::' + (n.text || '');
+      if (!seen.has(key)) {
+        seen.add(key);
+        const conf = CONFLICTS.find(c => c.id === n.c);
+        list.push({
+          id: 'tick_' + idx,
+          type: 'ticker',
+          tag: n.tag || 'TICKER',
+          tagColor: 'var(--cyan)',
+          title: n.tag ? `${n.tag} (Ticker)` : 'Live-Meldung',
+          text: n.text,
+          date: '', // Live
+          cid: n.c,
+          cname: conf ? conf.name : (n.c ? n.c.toUpperCase() : null),
+          center: conf ? conf.center : null,
+          src: null,
+          cas: null,
+          isHot: true
+        });
+      }
+    });
+
+    // 2. Ereignisse & Treffer (EVENTS)
+    (EVENTS || []).forEach((e, idx) => {
+      if (e.c === 'unrest' || daysAgo(e.d) > (CONFIG.eventMaxDays || 14)) return;
+      const key = (e.d || '') + '::' + (e.title || '') + '::' + (e.txt || '');
+      if (!seen.has(key)) {
+        seen.add(key);
+        const conf = CONFLICTS.find(c => c.id === e.c);
+        const evMeta = EVENT_TYPES[e.t] || { label: e.t || 'Ereignis', color: '#ff4d6d' };
+        list.push({
+          id: 'ev_' + idx,
+          type: 'event',
+          eventIndex: idx,
+          tag: evMeta.label,
+          tagColor: evMeta.color,
+          title: e.title || evMeta.label,
+          text: e.txt || e.title,
+          date: e.d || '',
+          cid: e.c,
+          cname: conf ? conf.name : null,
+          coords: e.coords,
+          src: e.src,
+          cas: e.cas,
+          isHot: true
+        });
+      }
+    });
+
+    // 3. Chronologische Lageverläufe der Konflikte
+    (CONFLICTS || []).forEach(c => {
+      if (c.id === 'unrest') return;
+      const ups = DataService.updatesFor ? DataService.updatesFor(c) : (c.updates || []);
+      (ups || []).forEach((u, uidx) => {
+        if (u.date && daysAgo(u.date) > (CONFIG.newsMaxDays || 14)) return;
+        const key = (u.date || '') + '::' + (u.text || '');
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push({
+            id: 'up_' + c.id + '_' + uidx,
+            type: 'conflict_update',
+            tag: u.tag || 'Lagebericht',
+            tagColor: INTENSITY_COLORS[c.intensity] || '#ffb547',
+            title: c.name,
+            text: u.text,
+            date: u.date || '',
+            cid: c.id,
+            cname: c.name,
+            center: c.center,
+            src: u.src,
+            cas: null,
+            user: !!u.user,
+            isHot: c.intensity >= 4
+          });
+        }
+      });
+    });
+
+    // 4. Schweizer Schlagzeilen (SWISS.news)
+    ((SWISS && SWISS.news) || []).forEach((sn, idx) => {
+      if (sn.date && daysAgo(sn.date) > (CONFIG.newsMaxDays || 14)) return;
+      const key = 'ch::' + (sn.tag || '') + '::' + (sn.text || '');
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({
+          id: 'ch_' + idx,
+          type: 'swiss',
+          tag: sn.tag || 'SCHWEIZ',
+          tagColor: 'var(--ch)',
+          title: 'Schweiz · ' + (sn.tag || 'Aktuell'),
+          text: sn.text,
+          date: sn.date || '',
+          cid: null,
+          cname: 'Schweiz',
+          coords: [8.2275, 46.8182],
+          src: sn.src,
+          cas: null,
+          isHot: false
+        });
+      }
+    });
+
+    list.sort((a, b) => {
+      if (!a.date && b.date) return -1;
+      if (a.date && !b.date) return 1;
+      return (b.date || '').localeCompare(a.date || '');
+    });
+
+    return list;
+  },
+
+  renderNews() {
+    const all = this.getAllHeadlines();
+    const q = (state.newsSearch || '').trim().toLowerCase();
+    const f = state.newsFilter || 'all';
+
+    const filtered = all.filter(item => {
+      if (f === 'attacks' && item.type !== 'event') return false;
+      if (f === 'ticker' && item.type !== 'ticker') return false;
+      if (f === 'conflicts' && item.type !== 'conflict_update') return false;
+      if (f === 'swiss' && item.type !== 'swiss') return false;
+      if (f === 'src' && !item.src) return false;
+      if (!q) return true;
+      return (item.title || '').toLowerCase().includes(q) ||
+             (item.text || '').toLowerCase().includes(q) ||
+             (item.tag || '').toLowerCase().includes(q) ||
+             (item.cname || '').toLowerCase().includes(q) ||
+             (item.date || '').includes(q);
+    });
+
+    const filterChips = [
+      ['all', `Alle (${all.length})`],
+      ['attacks', 'Treffer / Angriffe'],
+      ['ticker', 'Ticker Live'],
+      ['conflicts', 'Konfliktverlauf'],
+      ['swiss', 'Schweiz'],
+      ['src', 'Mit Quelle ↗']
+    ];
+
+    $('#leftHead').innerHTML = `
+      <div class="mt-2.5">
+        <div class="flex items-center justify-between">
+          <div class="text-[12px] font-semibold flex items-center gap-2">
+            <span class="live-dot"></span><span>Lagezentrum · Schlagzeilen</span>
+          </div>
+          <span class="mono text-[11px] muted">${filtered.length} Meldungen</span>
+        </div>
+        <div class="relative mt-2">
+          <i data-lucide="search" class="w-3.5 h-3.5 absolute left-2.5 top-2.5 muted"></i>
+          <input id="newsSearchInput" type="text" placeholder="Schlagzeilen filtern (z. B. Drohne, Gaza, Kiew) …"
+            value="${esc(state.newsSearch || '')}"
+            class="w-full text-[12px] py-1.5 pl-8 pr-7 rounded-lg border hairline bg-white/5 outline-none focus:border-cyan-400">
+          ${state.newsSearch ? '<button id="newsSearchClear" class="absolute right-2 top-2 text-muted hover:text-white text-xs">✕</button>' : ''}
+        </div>
+        <div class="flex gap-1 mt-2 overflow-x-auto pb-0.5 scrollbar-none" id="newsFilterBar">
+          ${filterChips.map(([k, label]) => `
+            <button class="chip btnchip ${f === k ? 'on !border-cyan-400 !text-cyan-200 !bg-cyan-500/10' : ''}" data-nf="${k}">
+              ${label}
+            </button>`).join('')}
+        </div>
+      </div>`;
+
+    $('#newsSearchInput').oninput = (e) => {
+      state.newsSearch = e.target.value;
+      this.renderNews();
+    };
+    if ($('#newsSearchClear')) {
+      $('#newsSearchClear').onclick = () => {
+        state.newsSearch = '';
+        this.renderNews();
+      };
+    }
+    $('#newsFilterBar').querySelectorAll('[data-nf]').forEach(b => {
+      b.onclick = () => {
+        state.newsFilter = b.dataset.nf;
+        this.renderNews();
+      };
+    });
+
+    if (!filtered.length) {
+      $('#leftBody').innerHTML = `
+        <div class="text-center py-12 text-muted">
+          <i data-lucide="newspaper" class="w-8 h-8 mx-auto opacity-30 mb-2"></i>
+          <div class="text-sm">Keine Schlagzeilen für diese Auswahl gefunden.</div>
+          <button class="chip btnchip mt-3" id="resetNewsFilter">Filter zurücksetzen</button>
+        </div>`;
+      $('#resetNewsFilter')?.addEventListener('click', () => {
+        state.newsSearch = '';
+        state.newsFilter = 'all';
+        this.renderNews();
+      });
+      return;
+    }
+
+    $('#leftBody').innerHTML = filtered.map((item, i) => {
+      const isLive = !item.date;
+      const tagBg = item.tagColor ? `${item.tagColor}22` : 'rgba(255,255,255,.07)';
+      const tagColor = item.tagColor || 'var(--text)';
+      return `
+        <div class="conf-item rounded-xl border hairline p-3 fade-in" style="animation-delay:${Math.min(i * 12, 180)}ms;background:rgba(255,255,255,.025)" data-news-id="${item.id}">
+          <div class="flex items-center justify-between gap-2 text-[10.5px]">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="chip" style="background:${tagBg};color:${tagColor};font-weight:600;font-size:9.5px;padding:1px 6px">
+                ${esc(item.tag)}
+              </span>
+              ${item.cname ? `<span class="chip mono muted text-[9.5px] truncate max-w-[130px]">${esc(item.cname)}</span>` : ''}
+            </div>
+            <div class="flex items-center gap-1.5 flex-none mono muted text-[10px]">
+              ${isLive ? '<span class="chip" style="color:var(--cyan);border-color:rgba(94,231,255,.3)"><span class="live-dot" style="width:5px;height:5px"></span>LIVE</span>' : fmtDate(item.date)}
+            </div>
+          </div>
+          <div class="text-[12.8px] font-medium leading-snug mt-1.5 text-white">
+            ${esc(item.title !== item.tag && item.type === 'event' ? item.title : (item.cname && item.type === 'conflict_update' ? item.cname + ': ' + item.tag : item.title))}
+          </div>
+          <p class="text-[12px] leading-relaxed mt-1 text-[#cfd3de]">
+            ${esc(item.text)}
+          </p>
+          ${item.cas ? `<div class="mt-2 text-[10.5px] flex items-center gap-1" style="color:#ffb3b8"><span class="chip" style="border-color:rgba(255,77,109,.4);color:#ffd6d9;font-size:9.5px">⚠️ ${esc(item.cas)}</span></div>` : ''}
+          <div class="flex items-center gap-2 mt-2.5 pt-2 border-t hairline text-[11px] flex-wrap">
+            ${item.coords ? `<button class="chip btnchip hover:border-cyan-400" data-fly-coords="${item.coords[0]},${item.coords[1]}" style="font-size:10px"><i data-lucide="map-pin" class="w-3 h-3 text-cyan-400"></i>Auf Karte</button>` : ''}
+            ${item.cid ? `<button class="chip btnchip hover:border-amber-400" data-open-conf="${item.cid}" style="font-size:10px"><i data-lucide="flame" class="w-3 h-3 text-amber-400"></i>Konflikt</button>` : ''}
+            ${item.src ? `<a class="chip btnchip ml-auto" style="font-size:10px;color:var(--cyan)" href="${esc(item.src)}" target="_blank" rel="noopener">Quelle ↗</a>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    $('#leftBody').querySelectorAll('[data-fly-coords]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const [lng, lat] = btn.dataset.flyCoords.split(',').map(Number);
+        map.flyTo({ center: [lng, lat], zoom: 5.5, duration: 1500 });
+      };
+    });
+    $('#leftBody').querySelectorAll('[data-open-conf]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        this.openConflict(btn.dataset.openConf, true);
+      };
+    });
+  },
+
+  renderStrategy() {
+    const sec = state.stratSection || '5gen';
+    $('#leftHead').innerHTML = `
+      <div class="mt-2.5">
+        <div class="flex items-center justify-between">
+          <div class="text-[12px] font-semibold flex items-center gap-1.5">
+            <i data-lucide="swords" class="w-4 h-4 text-cyan-400"></i>
+            <span>Militärgeschichte & Doktrin</span>
+          </div>
+          <button class="chip btnchip hover:border-cyan-400 text-[10px]" id="btnStratSidebar">
+            <i data-lucide="sidebar" class="w-3 h-3 text-cyan-400"></i>Grossansicht
+          </button>
+        </div>
+        <p class="text-[11px] muted mt-1 leading-snug">Von den 5 Generationen des Krieges bis zu Clausewitz und der Schweizer Gesamtverteidigung.</p>
+        <div class="seg w-full mt-2" id="stratSecSeg">
+          <button data-sec="5gen" class="${sec === '5gen' ? 'on' : ''} flex-1 justify-center text-[11px]">5 Generationen</button>
+          <button data-sec="thinkers" class="${sec === 'thinkers' ? 'on' : ''} flex-1 justify-center text-[11px]">Strategen</button>
+          <button data-sec="swiss" class="${sec === 'swiss' ? 'on' : ''} flex-1 justify-center text-[11px]">Schweiz</button>
+        </div>
+      </div>`;
+
+    $('#btnStratSidebar').onclick = () => this.openStrategySidebar();
+    $('#stratSecSeg').querySelectorAll('[data-sec]').forEach(b => {
+      b.onclick = () => {
+        state.stratSection = b.dataset.sec;
+        this.renderStrategy();
+      };
+    });
+
+    if (sec === '5gen') {
+      const gens = [
+        {
+          num: '1GW',
+          name: '1. Generation: Massenheere & Linientaktik',
+          short: 'Manpower & Kolonne',
+          era: 'ca. 1648 – 1860er',
+          color: '#5b9cff',
+          summary: 'Geordnete Massenheere, Linienformationen und Salvenfeuer glattrohriger Musketen. Entstand nach dem Westfälischen Frieden (Staatsmonopol).',
+          weapons: 'Vorderlader-Musketen mit Bajonett, glattrohrige Geschütze mit Vollkugeln und Kartätschen. Reichweite unter 100 m.',
+          doctrine: 'Lineare Schlachtordnung zur Konzentration von Salvenfeuer; Sturmkolonnen für den Durchbruch. Gehorsam und geschlossenes Schlachtfeld.',
+          figures: 'Napoleon Bonaparte (Levée en masse, Austerlitz, Jena), Friedrich der Grosse, Carl von Clausewitz.',
+          turning: 'Gezogene Läufe mit Minié-Geschossen erhöhten Treffsicherheit dramatisch; frontale Linienstürme wurden im US-Bürgerkrieg tödlich.'
+        },
+        {
+          num: '2GW',
+          name: '2. Generation: Industrielle Feuerkraft & Gräben',
+          short: 'Waffen & Abnutzung',
+          era: 'ca. 1860er – 1918',
+          color: '#ffb547',
+          summary: 'Feuerkraft ersetzt Manpower: «Die Artillerie erobert, die Infanterie besetzt» (Pétain). Industrielle Massenvernichtung im Schützengraben.',
+          weapons: 'Hinterladergewehre, Maschinengewehre (Maxim), gezogene Schnellfeuer-Artillerie (Canon 75), Eisenbahnlogistik, Stacheldraht, Giftgas.',
+          doctrine: 'Methodisches Gefecht (Bataille conduite), minutiös durchgeplante Feuerwalzen, tagelange Trommelfeuer, streng hierarchische Top-Down-Führung, Attrition Warfare.',
+          figures: '1. Weltkrieg (Verdun 1916, Somme, Passchendaele). General Philippe Pétain, Douglas Haig, Erich von Falkenhayn.',
+          turning: 'Millionen Tote ohne strategischen Durchbruch. Deutsche Stosstrupp-Infiltration (1918) und erste Panzereinsätze erzwangen den Bewegungskrieg.'
+        },
+        {
+          num: '3GW',
+          name: '3. Generation: Manöver & Verbundene Waffen',
+          short: 'Geschwindigkeit & Lähmung',
+          era: 'ca. 1918 – 1980er',
+          color: '#3ee6a8',
+          summary: 'Abkehr von linearer Feuerkraft. Den Feind durch Geschwindigkeit, Schwerpunktbildung und Umgehung mental und operativ lähmen.',
+          weapons: 'Mechanisierte Panzerverbände, motorisierte Infanterie, Luftnahunterstützung (CAS/Stuka), taktischer Sprechfunk in Echtzeit, Radar.',
+          doctrine: 'Verbundene Waffen (Combined Arms), Auftragstaktik (Mission Command – Initiative beim Unterführer vor Ort), OODA-Loop von John Boyd (Entscheidungszyklus schneller durchlaufen als der Gegner).',
+          figures: 'Heinz Guderian, Erwin Rommel, George S. Patton, Erich von Manstein, John Boyd. Blitzkrieg 1940, Operation Bagration 1944, Sechstagekrieg 1967.',
+          turning: 'Gegen irreguläre Aufständische, die im Volk untertauchen, liefen Panzerkolonnen ins Leere (Vietnam, Afghanistan).'
+        },
+        {
+          num: '4GW',
+          name: '4. Generation: Asymmetrie & Aufstand',
+          short: 'Insurgency & Zermürbung',
+          era: 'ca. 1960er – 2010er',
+          color: '#f472b6',
+          summary: 'Verlust des Staatenmonopols auf Gewalt. Nicht-staatliche Milizen und Guerillas brechen den politischen Willen der gegnerischen Gesellschaft.',
+          weapons: 'IEDs (Sprengfallen), RPGs, Kalaschnikows, zivile Kommunikationsnetze, Internet- und Videopropaganda, Verstecke im urbanen Raum & Tunnelsystemen.',
+          doctrine: 'Asymmetrie: Keine Uniformen, vollständiges Verschmelzen mit Zivilisten. Ziel ist nicht der militärische Sieg im Gefecht, sondern das Zermürben der gegnerischen Heimatfront durch endlose Dauer.',
+          figures: 'William S. Lind (Begründer des 4GW-Konzepts 1989), Mao Zedong (Theorie des Volkskriegs), Vo Nguyen Giap (Vietnam), David Kilcullen, General David Petraeus (COIN).',
+          turning: 'Aufstände zermürben Demokratien, doch mit der Digitalisierung entstand ein noch umfassenderes, weltweites Gefechtsfeld ohne Grenzen.'
+        },
+        {
+          num: '5GW',
+          name: '5. Generation: Informationskrieg & Kognitive Kriegsführung',
+          short: 'Information, Cyber & Hybride Dominanz',
+          era: 'Gegenwart & Zukunft (ab 2010er)',
+          color: '#ff4d6d',
+          summary: '«Krieg führen, ohne dass der Gegner merkt, dass er angegriffen wird». Der menschliche Verstand, Datenströme, KI und globale Netze sind das Schlachtfeld.',
+          weapons: 'KI-gestützte Desinformation, Deepfakes, Cyberangriffe (Stuxnet, BlackEnergy), FPV-Drohnenschwärme, Loitering Munition, Satellitenstörung, Sabotage kritischer Infrastrukturen (Unterseekabel, Pipelines).',
+          doctrine: 'Kognitive Kriegsführung (Cognitive Warfare), Threshold Warfare (Grauzonenaktionen exakt unterhalb der Kriegserklärung oder Art. 5 NATO), gläsernes Gefechtsfeld (omnipräsente Sensorik), Multi-Domain Operations (MDO: Land, Luft, See, Cyber, Weltraum).',
+          figures: 'Ukraine-Krieg (multiphasischer Krieg aus Gräben, Drohnen, Starlink & Cyber), Gerasimov-Doktrin (4:1 Verhältnis nicht-militärischer zu militärischen Massnahmen), Chinas «Drei Kriegsführungen» (Psychologisch, Medien, Lawfare).',
+          turning: 'Autonome KI-Waffensysteme und die Verwundbarkeit vernetzter Gesellschaften verändern die Geopolitik fundamental.'
+        }
+      ];
+
+      $('#leftBody').innerHTML = `
+        <div class="p-2.5 rounded-xl border hairline bg-white/[0.02] text-[11.5px] leading-relaxed">
+          <div class="text-[10px] uppercase tracking-wider font-semibold text-cyan-300 mb-1">Entwicklung der Kriegsführung</div>
+          Vom Konzept von William S. Lind (1989) bis zur modernen Multi-Domain-Doktrin: Kriege verlagern sich von der reinen <b>physischen Vernichtung</b> (1GW–2GW) über das <b>operative Manöver</b> (3GW) zur <b>politischen Zermürbung</b> (4GW) und schliesslich zur <b>kognitiven und digitalen Beherrschung</b> (5GW).
+        </div>
+        <div class="space-y-2.5 mt-2">
+          ${gens.map(g => `
+            <div class="card !p-3 hover:border-white/20 transition-all cursor-pointer" data-expand-gen="${g.num}">
+              <div class="flex items-center justify-between gap-2">
+                <span class="chip mono font-bold text-[10.5px]" style="border-color:${g.color};color:${g.color};background:${g.color}18">
+                  ${g.num}
+                </span>
+                <span class="mono text-[10px] muted">${g.era}</span>
+              </div>
+              <div class="font-semibold text-[13px] mt-1.5 text-white">${g.name}</div>
+              <div class="text-[11px] font-medium mt-0.5" style="color:${g.color}">${g.short}</div>
+              <p class="text-[11.8px] text-[#cfd3de] mt-1.5 leading-snug">${g.summary}</p>
+              
+              <div class="mt-2.5 pt-2 border-t hairline space-y-1.5 text-[11px]">
+                <div><span class="muted font-semibold">Taktik & Doktrin:</span> <span class="text-[#cfd3de]">${g.doctrine}</span></div>
+                <div><span class="muted font-semibold">Waffen & Technik:</span> <span class="text-[#cfd3de]">${g.weapons}</span></div>
+                <div><span class="muted font-semibold">Köpfe & Schlachten:</span> <span class="text-[#cfd3de]">${g.figures}</span></div>
+                <div class="text-[10.5px] text-amber-200/90 bg-amber-500/10 rounded-lg p-2 border border-amber-500/20 mt-1.5">
+                  <span class="font-semibold text-amber-300">Wendepunkt:</span> ${g.turning}
+                </div>
+              </div>
+            </div>`).join('')}
+        </div>
+        <button class="btn w-full justify-center mt-3" id="btnOpenFullStrat"><i data-lucide="book-open"></i>Vollständiges Dossier in Seitenleiste öffnen</button>`;
+
+      $('#btnOpenFullStrat')?.addEventListener('click', () => this.openStrategySidebar());
+    } else if (sec === 'thinkers') {
+      const thinkers = [
+        {
+          name: 'Sunzi (Sun Tzu)',
+          era: 'ca. 500 v. Chr. · Antikes China',
+          work: '«Die Kunst des Krieges»',
+          core: '«Die grösste Leistung besteht darin, den Widerstand des Feindes ohne Kampf zu brechen.»',
+          color: '#ffb547',
+          details: 'Betont Täuschung, Vorbereitung, Kenntnis des Gegners und die Anpassung an das Gelände wie fliessendes Wasser. Gewalt ist das letzte Mittel, wenn Diplomatie und Spionage versagen.'
+        },
+        {
+          name: 'Carl von Clausewitz',
+          era: '1780 – 1831 · Preussen',
+          work: '«Vom Kriege»',
+          core: '«Der Krieg ist eine bloße Fortsetzung der Politik mit anderen Mitteln.»',
+          color: '#5b9cff',
+          details: 'Prägte Schlüsselbegriffe der modernen Militärtheorie: Der Schwerpunkt (Center of Gravity), der «Nebel des Krieges» (Ungewissheit aller Meldungen) und die «Friktion» (was auf dem Papier einfach scheint, ist in der Realität voller Reibung).'
+        },
+        {
+          name: 'John Boyd',
+          era: '1927 – 1997 · USA (Oberst der US Air Force)',
+          work: 'OODA-Loop (Observe – Orient – Decide – Act)',
+          core: '«Wer den Entscheidungszyklus schneller durchläuft, treibt den Feind in Lähmung und Panik.»',
+          color: '#3ee6a8',
+          details: 'Gilt als Urheber der modernen Manöverkriegsführung. Wer die Schleife Beobachten ➔ Orientieren ➔ Entscheiden ➔ Handeln schneller und flexibler abschliesst, unterläuft die gegnerische Reaktionsfähigkeit.'
+        },
+        {
+          name: 'Basil Liddell Hart',
+          era: '1895 – 1970 · Grossbritannien',
+          work: '«Strategy» (Strategie der indirekten Annäherung)',
+          core: '«Triff den Gegner dort, wo er dich am wenigsten erwartet und am schwersten abwehren kann.»',
+          color: '#a78bfa',
+          details: 'Kritiker des frontalen Abnutzungskriegs des 1. Weltkriegs. Propagierte unerwartete, indirekte Angriffe auf Nachschub und Moral des Gegners.'
+        }
+      ];
+
+      $('#leftBody').innerHTML = `
+        <div class="space-y-2.5">
+          ${thinkers.map(t => `
+            <div class="card !p-3">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-[13px] text-white">${t.name}</span>
+                <span class="chip mono text-[9.5px]">${t.era}</span>
+              </div>
+              <div class="text-[11px] font-medium mt-0.5" style="color:${t.color}">${t.work}</div>
+              <blockquote class="text-[11.8px] italic mt-2 pl-2.5 border-l-2" style="border-color:${t.color};color:#f1f3f8">
+                ${t.core}
+              </blockquote>
+              <p class="text-[11.5px] text-[#cfd3de] mt-2 leading-relaxed">${t.details}</p>
+            </div>`).join('')}
+        </div>`;
+    } else {
+      // Schweizer Gesamtverteidigung
+      $('#leftBody').innerHTML = `
+        <div class="space-y-2.5">
+          <div class="card ch !p-3">
+            <h4 class="!text-white font-semibold flex items-center gap-2">
+              <svg viewBox="0 0 32 32" width="13" height="13"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>
+              Schweizer Sicherheitsarchitektur im 5GW-Zeitalter
+            </h4>
+            <p class="text-[11.8px] leading-relaxed mt-1 text-[#e8eaf0]">
+              Als bewaffneter, dauernd neutraler Staat ohne NATO-Bündnisgarantie muss die Schweiz das gesamte Bedrohungsspektrum von 1GW bis 5GW eigenständig oder in flexibler Kooperation abdecken.
+            </p>
+          </div>
+
+          <div class="card !p-3 space-y-2 text-[11.8px]">
+            <div class="font-semibold text-cyan-300 text-[12px]">Pfeiler der modernen Schweizer Gesamtverteidigung</div>
+            
+            <div class="rounded-lg p-2 bg-white/[0.03] border hairline">
+              <b class="text-white">1. Cyber- & Informationsraum (Kommando Cyber)</b>
+              <div class="text-muted text-[11px] mt-0.5">Schutz kritischer Infrastrukturen (Finanzplatz, Strom, Datennetze), Abwehr von Spionage und kognitiver Einflussnahme.</div>
+            </div>
+
+            <div class="rounded-lg p-2 bg-white/[0.03] border hairline">
+              <b class="text-white">2. Souveränität im Luftraum (F-35A & Bodluv)</b>
+              <div class="text-muted text-[11px] mt-0.5">Verbindung aus modernen Tarnkappen-Kampfjets (F-35A Lightning II) und dem Patriot-Langstrecken-Luftverteidigungssystem gegen Marschflugkörper und ballistische Bedrohungen.</div>
+            </div>
+
+            <div class="rounded-lg p-2 bg-white/[0.03] border hairline">
+              <b class="text-white">3. Sensorik, Drohnen & Aufklärung</b>
+              <div class="text-muted text-[11px] mt-0.5">Echtzeit-Lagebild durch Drohnenaufklärung, elektronische Kampfführung (EloKa) und Verknüpfung ziviler und militärischer Sensoren.</div>
+            </div>
+
+            <div class="rounded-lg p-2 bg-white/[0.03] border hairline">
+              <b class="text-white">4. Zivile Resilienz & Milizprinzip</b>
+              <div class="text-muted text-[11px] mt-0.5">Notvorräte, Schutzräume für 100% der Bevölkerung, dezentrale Trinkwasserversorgung und die Verankerung der Armee in der Gesellschaft durch das Milizsystem.</div>
+            </div>
+          </div>
+        </div>`;
+    }
+  },
+
+  openStrategySidebar() {
+    this.openSidebar(`
+      <div class="p-5 border-b hairline flex items-center justify-between" style="background:linear-gradient(135deg, rgba(94,231,255,.12), transparent)">
+        <div>
+          <div class="text-[10.5px] uppercase tracking-[.14em] text-cyan-400 font-semibold">Militärgeschichte & Doktrin</div>
+          <h2 class="text-lg font-bold text-white mt-0.5">Die 5 Generationen der Kriegsführung (5GW)</h2>
+        </div>
+        <button class="muted hover:text-white p-1" data-close><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="flex-1 scroll p-5 space-y-4 text-[12.5px] leading-relaxed">
+        <div class="card !p-4 bg-white/[0.02]">
+          <h4 class="text-cyan-300 font-semibold text-[11.5px] uppercase tracking-wider mb-2">Historische Evolution nach William S. Lind</h4>
+          <p class="text-[#cfd3de]">
+            Das Konzept der <b>Generations of Modern Warfare</b> wurde 1989 von William S. Lind und US-Militäranalysten formuliert, um die Transformation von Staatenkriegen hin zu asymmetrischen und hybriden Konflikten theoretisch zu erklären.
+          </p>
+        </div>
+
+        <div class="card !p-4">
+          <div class="flex items-center gap-2">
+            <span class="chip font-bold text-blue-400 border-blue-500/40 bg-blue-500/10">1GW</span>
+            <span class="text-sm font-bold text-white">1. Generation (1648 – 1860er): Massenheere & Linientaktik</span>
+          </div>
+          <p class="mt-2 text-[#cfd3de]">
+            <b>Kernidee:</b> Manpower und geordnetes Salvenfeuer. Nach dem Westfälischen Frieden monopolisierten Nationalstaaten das Kriegshandwerk. Die glatte Muskete erforderte dichte Linienformationen (zwei bis drei Glieder tief), um eine tödliche Feuerwand zu erzeugen.
+          </p>
+          <div class="mt-2 text-[11.5px] text-muted space-y-1">
+            <div>• <b>Hauptvertreter:</b> Napoleon Bonaparte, Friedrich der Grosse, Carl von Clausewitz.</div>
+            <div>• <b>Schlachten:</b> Austerlitz (1805), Jena-Auerstedt (1806), Waterloo (1815).</div>
+            <div>• <b>Ende:</b> Gezogene Gewehrläufe im Amerikanischen Bürgerkrieg machten Linienformationen zu Todesfallen.</div>
+          </div>
+        </div>
+
+        <div class="card !p-4">
+          <div class="flex items-center gap-2">
+            <span class="chip font-bold text-amber-400 border-amber-500/40 bg-amber-500/10">2GW</span>
+            <span class="text-sm font-bold text-white">2. Generation (1860er – 1918): Industrielle Feuerkraft & Gräben</span>
+          </div>
+          <p class="mt-2 text-[#cfd3de]">
+            <b>Kernidee:</b> Die Industrialisierung übernimmt das Gefechtsfeld. Gezogene Schnellfeuerartillerie, Maschinengewehre und Eisenbahnen ermöglichen Massenaufmärsche und gigantische Abnutzungsschlachten (Attrition Warfare).
+          </p>
+          <div class="mt-2 text-[11.5px] text-muted space-y-1">
+            <div>• <b>Doktrin:</b> «L'artillerie conquiert, l'infanterie occupe» (Philippe Pétain). Top-Down-Feuerwalzen.</div>
+            <div>• <b>Schlachten:</b> Schlacht um Verdun (1916), Schlacht an der Somme, Passchendaele.</div>
+            <div>• <b>Ende:</b> Starre Gräben brachen durch deutsche Stosstrupp-Taktik (Infiltration) und erste Panzer zusammen.</div>
+          </div>
+        </div>
+
+        <div class="card !p-4">
+          <div class="flex items-center gap-2">
+            <span class="chip font-bold text-emerald-400 border-emerald-500/40 bg-emerald-500/10">3GW</span>
+            <span class="text-sm font-bold text-white">3. Generation (1918 – 1980er): Manöver & Verbundene Waffen</span>
+          </div>
+          <p class="mt-2 text-[#cfd3de]">
+            <b>Kernidee:</b> Geschwindigkeit und operative Lähmung statt frontaler Zermürbung. Panzer, motorisierte Infanterie und Luftnahunterstützung (Stuka/CAS) werden im Verbund (Combined Arms) eingesetzt, um gegnerische Festungen zu umgehen und Führungszentren im Rückraum abzuschneiden.
+          </p>
+          <div class="mt-2 text-[11.5px] text-muted space-y-1">
+            <div>• <b>Kernelemente:</b> <i>Auftragstaktik</i> (Handlungsfreiheit vor Ort) und der <i>OODA-Loop</i> von John Boyd.</div>
+            <div>• <b>Strategen & Kriege:</b> Guderian, Rommel, Patton, Manstein. Blitzkrieg 1940, Sechstagekrieg 1967.</div>
+            <div>• <b>Ende:</b> Asymmetrische Guerillakämpfer tauchen im Volk unter; Panzerverbände verpuffen.</div>
+          </div>
+        </div>
+
+        <div class="card !p-4">
+          <div class="flex items-center gap-2">
+            <span class="chip font-bold text-pink-400 border-pink-500/40 bg-pink-500/10">4GW</span>
+            <span class="text-sm font-bold text-white">4. Generation (1960er – 2010er): Asymmetrie & Aufstand</span>
+          </div>
+          <p class="mt-2 text-[#cfd3de]">
+            <b>Kernidee:</b> Verlust des Staatenmonopols auf Gewalt. Nicht-staatliche Akteure (Guerilla, Milizen, Terrornetzwerke wie Taliban, Vietcong, Hisbollah) nutzen IEDs, Hinterhalte und Medienberichte, um den politischen Willen der gegnerischen Demokratien zu zermürben.
+          </p>
+          <div class="mt-2 text-[11.5px] text-muted space-y-1">
+            <div>• <b>Theoretiker:</b> William S. Lind, Mao Zedong (Volkskrieg), David Kilcullen, General David Petraeus.</div>
+            <div>• <b>Kriege:</b> Vietnamkrieg, Sowjet-Afghanistan, Irakkrieg, Afghanistan 2001–2021.</div>
+          </div>
+        </div>
+
+        <div class="card !p-4 border-red-500/40 bg-red-500/[0.04]">
+          <div class="flex items-center gap-2">
+            <span class="chip font-bold text-red-400 border-red-500/40 bg-red-500/15">5GW</span>
+            <span class="text-sm font-bold text-white">5. Generation (ab 2010er): Informationskrieg & Kognitive Kriegsführung</span>
+          </div>
+          <p class="mt-2 text-[#cfd3de]">
+            <b>Kernidee:</b> Das Schlachtfeld ist der menschliche Verstand, das Cyber-Ökosystem und globale Lieferketten. Kriegführung findet dauerhaft und knapp unterhalb der Kriegsschwelle statt (Threshold Warfare / Grauzone).
+          </p>
+          <div class="mt-2 text-[11.5px] text-muted space-y-1">
+            <div>• <b>Instrumente:</b> KI-Desinformation, Deepfakes, Cyberangriffe, FPV-Drohnenschwärme, Loitering Munition.</div>
+            <div>• <b>Doktrinen:</b> Multi-Domain Operations (MDO), Gerasimov-Doktrin (4:1 nicht-militärisch zu militärisch), Chinas «Drei Kriegsführungen».</div>
+            <div>• <b>Reallabor:</b> Ukraine-Krieg als Synthese aus 1GW/2GW-Gräben mit 5GW-Satelliten/Drohnen/KI.</div>
+          </div>
+        </div>
+
+        <div class="card !p-4 bg-white/[0.02]">
+          <h4 class="text-amber-300 font-semibold text-[11.5px] uppercase tracking-wider mb-2">Vergleichsmatrix der 5 Generationen</h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-[11px] text-left border-collapse">
+              <thead>
+                <tr class="border-b hairline text-muted">
+                  <th class="py-1.5 pr-2">Gen.</th>
+                  <th class="py-1.5 pr-2">Hauptressource</th>
+                  <th class="py-1.5 pr-2">Schwerpunkt</th>
+                  <th class="py-1.5">Entscheidender Faktor</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-white/5">
+                <tr><td class="py-1.5 font-bold text-blue-400">1GW</td><td>Manpower / Masse</td><td>Linienfeuerkraft</td><td>Disziplin & Kolonnensturm</td></tr>
+                <tr><td class="py-1.5 font-bold text-amber-400">2GW</td><td>Industrielle Waffen</td><td>Artillerie & Gräben</td><td>Feuerkraft & Logistik</td></tr>
+                <tr><td class="py-1.5 font-bold text-emerald-400">3GW</td><td>Tempo & Manöver</td><td>Verbundene Waffen</td><td>Auftragstaktik & OODA-Loop</td></tr>
+                <tr><td class="py-1.5 font-bold text-pink-400">4GW</td><td>Asymmetrie & Geduld</td><td>Heimatfront des Gegners</td><td>Politischer Zermürbungswille</td></tr>
+                <tr><td class="py-1.5 font-bold text-red-400">5GW</td><td>Information & Kognition</td><td>Menschlicher Verstand & Netze</td><td>Algorithmen, Drohnen & Resilienz</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>`);
+  },
+  renderTracker() {
+    const high = CONFLICTS.filter(c => c.intensity >= 4).length, recent = EVENTS.filter(e => daysAgo(e.d) <= 7).length;
+    const opts = [[0, 'Alle'], [3, '≥ Mittel'], [4, '≥ Hoch'], [5, 'Krieg']];
+    $('#leftHead').innerHTML = `<div class="grid grid-cols-3 gap-2 mt-3">${[['Konflikte', CONFLICTS.length, 'var(--text)'], ['Hohe Intens.', high, 'var(--red)'], ['Treffer 7 T.', recent, 'var(--amber)']].map(([l, v, c]) => `
+      <div class="rounded-xl border hairline px-2.5 py-2" style="background:rgba(255,255,255,.03)"><div class="text-[10px] muted uppercase tracking-wider">${l}</div><div class="text-xl font-semibold mono" style="color:${c}">${v}</div></div>`).join('')}</div>
+      <div class="flex gap-1.5 mt-3 flex-wrap">${opts.map(([v, l]) => `<button class="chip btnchip" data-f="${v}" style="${state.filter === v ? 'border-color:rgba(94,231,255,.5);color:#c9f7ff;background:rgba(94,231,255,.1)' : ''}">${l}</button>`).join('')}</div>`;
+    $('#leftHead').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.filter = +b.dataset.f; this.renderLeft(); refreshSources(); });
+    const list = visibleConflicts().sort((a, b) => b.intensity - a.intensity || a.name.localeCompare(b.name));
+    $('#leftBody').innerHTML = list.map((c, i) => {
+      const last = (c.updates || [])[0];
+      return `<div class="conf-item rounded-xl border hairline p-3 fade-in ${state.selectedConflict === c.id ? 'sel' : ''}" data-id="${c.id}" style="animation-delay:${i * 20}ms;background:rgba(255,255,255,.02)">
+        <div class="flex items-start gap-2.5">
+          <span class="dot mt-1.5" style="background:${INTENSITY_COLORS[c.intensity]};box-shadow:0 0 10px ${INTENSITY_COLORS[c.intensity]}"></span>
+          <div class="flex-1 min-w-0">
+            <div class="text-[13px] font-medium leading-snug">${esc(c.name)}</div>
+            <div class="text-[11px] muted mt-0.5">${esc(c.region)} · ${esc(c.type)}</div>
+            ${last ? `<div class="text-[11px] mt-1.5 leading-snug" style="color:#cfd3de"><span class="mono muted">${fmtDate(last.date)}</span> ${esc(last.text.length > 95 ? last.text.slice(0, 95) + '…' : last.text)}</div>` : ''}
+            <div class="flex items-center justify-between mt-2"><div class="flex items-center gap-1.5 text-[10.5px]">${intensityBars(c.intensity)}<span class="muted">${INTENSITY_LABEL[c.intensity]}</span></div>
+            ${window.CH_IMPACT?.[c.id] ? '<span class="chip" style="font-size:9.5px;color:#ffb3b8;border-color:rgba(255,45,58,.35)">CH-relevant</span>' : ''}</div>
+          </div>
+        </div></div>`;
+    }).join('') || '<div class="text-center muted text-sm py-10">Keine Konflikte für diesen Filter.</div>';
+    $('#leftBody').querySelectorAll('.conf-item').forEach(el => el.onclick = () => this.openConflict(el.dataset.id, true));
+  },
+  renderRadar() {
+    $('#leftHead').innerHTML = `<p class="text-[11.5px] muted mt-3 leading-relaxed">Auswirkungen der Weltlage auf die Schweiz und Brennpunkte mit Schweiz-Bezug.</p>`;
+    const hot = Object.entries(COUNTRIES).filter(([iso, d]) => d.r >= 3 && d.x >= 3 && state.byIso[iso]).sort((a, b) => (b[1].r + b[1].x) - (a[1].r + a[1].x)).slice(0, 14);
+    $('#leftBody').innerHTML = `
+      ${SWISS.radar.map(r => `<div class="card ch !p-3"><div class="flex items-center justify-between"><span class="text-[12.5px] font-semibold">${esc(r.area)}</span>${meter(r.level, RISK_COL[r.level])}</div><p class="!text-[11.5px] mt-1 !leading-snug">${esc(r.text)}</p><div class="text-[9.5px] muted mt-1">Quelle: ${esc(r.src)}</div></div>`).join('')}
+      <div class="text-[10px] uppercase tracking-[.14em] muted pt-2 px-1">Brennpunkte mit hoher Schweiz-Relevanz</div>
+      ${hot.map(([iso, d]) => { const p = state.byIso[iso].properties; return `<div class="conf-item rounded-xl border hairline p-2.5 flex items-center gap-2.5" data-iso="${iso}" style="background:rgba(255,255,255,.02)">
+        ${flag(p.ISO_A2_EH || p.ISO_A2, 16)}<div class="flex-1 min-w-0"><div class="text-[12.5px] font-medium truncate">${esc(p.NAME_DE)}</div><div class="text-[10.5px] muted truncate">${esc((d.tags || []).slice(0, 2).join(' · '))}</div></div>
+        <div class="text-right text-[9.5px] muted leading-tight">Lage ${meter(d.r, RISK_COL[d.r])}<br>CH ${meter(d.x, '#ff2d3a')}</div></div>`; }).join('')}`;
+    $('#leftBody').querySelectorAll('[data-iso]').forEach(el => el.onclick = () => this.openCountry(el.dataset.iso));
+  },
+  renderTicker() {
+    const items = NEWS.map(n => `<span class="inline-flex items-center gap-2 cursor-pointer hover:text-white" ${n.c ? `data-c="${n.c}"` : ''}><span class="chip mono" style="font-size:10px;color:var(--cyan)">${esc(n.tag)}</span><span class="text-[#cfd3de]">${esc(n.text)}</span></span>`).join('<span class="muted">◆</span>');
+    $('#ticker').innerHTML = items + '<span class="muted">◆</span>' + items;
+    $('#ticker').querySelectorAll('[data-c]').forEach(el => el.onclick = () => this.openConflict(el.dataset.c, true));
+  },
+  renderLegend() {
+    const el = $('#legend');
+    if (state.layers.blocs) {
+      el.innerHTML = `<span class="muted uppercase tracking-wider text-[10px]">Blöcke</span>` + Object.values(BLOCS).map(b => `<span class="flex items-center gap-1.5" title="${esc(b.desc)}"><span class="dot" style="background:${b.color}"></span>${b.short === 'NA' ? 'Non-Aligned' : b.short === 'N' ? 'Neutral' : b.name.split(' ')[0]}</span>`).join('');
+    } else {
+      el.innerHTML = `<span class="muted uppercase tracking-wider text-[10px]">Zonen</span>` +
+        ['besetzt', 'kampf', 'kontrolle', 'spannung', 'epidemie'].map(k => `<span class="flex items-center gap-1.5"><span style="width:10px;height:10px;border-radius:2px;background:${ZONE_STATUS[k].color};opacity:.8"></span>${ZONE_STATUS[k].label.replace(' (Ukraine, live)', '')}</span>`).join('') +
+        `<span class="muted uppercase tracking-wider text-[10px] ml-2">Treffer</span>` +
+        ['flughafen', 'luft', 'drohne', 'schiff', 'gefecht', 'unruhen'].map(k => `<span class="flex items-center gap-1.5"><span class="dot" style="background:${EVENT_TYPES[k].color};${k === 'flughafen' ? 'box-shadow:0 0 0 2px #fff' : ''}"></span>${EVENT_TYPES[k].label.split(' ')[0]}</span>`).join('');
+    }
+  },
+  renderLayerPop() {
+    $('#basemapOpts').innerHTML = Object.entries(BASEMAPS).map(([k, b]) => `<div class="bm-opt ${state.basemap === k ? 'on' : ''}" data-bm="${k}" title="${esc(b.desc || b.label)}"><div class="sw" style="background:${b.sw}"></div>${b.label}</div>`).join('');
+    $('#basemapOpts').querySelectorAll('[data-bm]').forEach(o => o.onclick = () => { state.basemap = o.dataset.bm; applyBasemap(); });
+    const defs = [['conflicts', 'Konflikte (Hauptschalter)', 'flame'], ['zones', 'Konfliktzonen (Provinzgrenzen)', 'hexagon'], ['ukraine', 'Ukraine-Front live (DeepStateMap)', 'git-commit-horizontal'],
+      ['events', 'Getroffene Orte / Ereignisse', 'crosshair'], ['heatmap', 'Intensitäts-Heatmap', 'thermometer'], ['blocs', 'Multilaterale Blöcke', 'layers'],
+      ['labels', 'Städte & Beschriftungen', 'type'], ['graticule', 'Gradnetz', 'grid-3x3'], ['rotate', 'Globus-Autorotation', 'rotate-3d']];
+    $('#layerToggles').innerHTML = defs.map(([k, l, ic]) => `<div class="flex items-center justify-between cursor-pointer select-none" data-k="${k}"><span class="flex items-center gap-2"><i data-lucide="${ic}" class="w-3.5 h-3.5 muted"></i>${l}</span><span class="toggle ${state.layers[k] ? 'on' : ''}"></span></div>`).join('');
+    $('#layerToggles').querySelectorAll('[data-k]').forEach(el => el.onclick = () => { state.layers[el.dataset.k] = !state.layers[el.dataset.k]; el.querySelector('.toggle').classList.toggle('on', state.layers[el.dataset.k]); applyLayerState(); });
+    icons();
+  },
+
+  // ---------- Sidebar ----------
+  openSidebar(html) {
+    $('#sidebarContent').innerHTML = html; $('#sidebar').classList.add('open'); icons();
+    $('#sidebarContent').querySelector('[data-close]')?.addEventListener('click', () => this.closeSidebar());
+    $('#sidebarContent').querySelectorAll('[data-goto]').forEach(el => el.onclick = () => this.openCountry(el.dataset.goto));
+    $('#sidebarContent').querySelectorAll('[data-conf]').forEach(el => el.onclick = () => this.openConflict(el.dataset.conf));
+    $('#sidebarContent').querySelectorAll('[data-ev]').forEach(el => el.onclick = () => this.openEvent(+el.dataset.ev));
+  },
+  closeSidebar() { $('#sidebar').classList.remove('open'); setSelected(null); state.selectedConflict = null; if (state.leftTab === 'conf') this.renderLeft(); },
+  evRow(i) {
+    const x = EVENTS[i], T = EVENT_TYPES[x.t] || EVENT_TYPES.luft;
+    return `<div class="conf-item flex gap-2.5 py-2 px-2 rounded-lg" data-ev="${i}"><span class="dot mt-1.5" style="background:${T.color};${x.t === 'flughafen' ? 'box-shadow:0 0 0 2px #fff' : ''}"></span>
+      <div class="min-w-0 flex-1"><div class="text-[12.5px] font-medium leading-snug">${esc(x.title)}</div><div class="text-[10.5px] muted">${T.label} · ${fmtDate(x.d)}${x.cas ? ` · <span style="color:#ffb3b8">${esc(x.cas)}</span>` : ''}</div></div></div>`;
+  },
+
+  openCountry(iso, fly = true) {
+    const f = state.byIso[iso]; if (!f) return;
+    const p = f.properties, d = COUNTRIES[iso] || {}, b = BLOCS[blocOf(iso)];
+    setSelected(iso); state.selectedConflict = null; if (state.leftTab === 'conf') this.renderLeft();
+    if (fly) map.fitBounds(bbox(f), { padding: { top: 120, bottom: 110, left: innerWidth > 900 ? 390 : 30, right: innerWidth > 900 ? 480 : 30 }, maxZoom: 6.5, duration: 1400 });
+    const name = p.NAME_DE || p.NAME, cont = CONTINENT_DE[p.CONTINENT] || p.CONTINENT;
+    const nbs = [...(state.neighbors[iso] || [])].map(n => state.byIso[n]?.properties).filter(Boolean);
+    const conflicts = CONFLICTS.filter(c => c.countries.includes(iso));
+    const evIdx = state.eventCountry.map((c, i) => c === iso ? i : -1).filter(i => i >= 0).sort((a, b) => (EVENTS[b].d || '').localeCompare(EVENTS[a].d || ''));
+    const zones = (window.ZONES?.zones.features || []).filter(z => z.properties.adm0 === iso);
+    const r = d.r || 1, x = d.x || 1;
+    const auto = (txt) => `<span class="muted">${txt}</span>`;
+
+    const tabs = [['lage', 'Lage', 'activity'], ['ch', 'Schweiz', null], ['geo', 'Geografie', 'mountain'], ['hist', 'Geschichte', 'scroll-text'], ['pol', 'Politik', 'landmark']];
+    const bodies = {
+      lage: `
+        <div class="card"><h4><i data-lucide="zap"></i>Aktuell wichtig</h4>
+          ${(d.now || []).length ? d.now.map(n => `<div class="flex gap-2.5 py-1.5 border-b hairline last:border-0 text-[12.8px] leading-snug"><span class="dot mt-1.5" style="background:${RISK_COL[r]}"></span><span>${esc(n)}</span></div>`).join('') : `<p>${esc(val(d.dom) || 'Keine aussergewöhnlichen Entwicklungen gemeldet; Lage stabil.')}</p>`}
+        </div>
+        ${conflicts.length ? `<div class="card"><h4><i data-lucide="flame"></i>Konflikte & Krisen (${conflicts.length})</h4>${conflicts.map(c => `<div class="conf-item rounded-lg p-2 -mx-1" data-conf="${c.id}"><div class="flex items-center gap-2"><span class="dot" style="background:${INTENSITY_COLORS[c.intensity]}"></span><b class="text-[12.8px]">${esc(c.name)}</b></div><div class="text-[11px] muted mt-0.5 ml-4">${esc(c.status)}</div></div>`).join('')}</div>` : ''}
+        ${zones.length ? `<div class="card"><h4><i data-lucide="map"></i>Betroffene Regionen</h4><div class="flex flex-wrap gap-1.5">${zones.map(z => `<span class="chip"><span class="dot" style="background:${ZONE_STATUS[z.properties.status].color}"></span>${esc(z.properties.name)} · ${esc(z.properties.label)}</span>`).join('')}</div></div>` : ''}
+        ${evIdx.length ? `<div class="card"><h4><i data-lucide="crosshair"></i>Getroffene Orte & Ereignisse (${evIdx.length})</h4><div class="-mx-2">${evIdx.map(i => this.evRow(i)).join('')}</div></div>` : ''}
+        <div class="card"><h4><i data-lucide="radio"></i>Live-Schlagzeilen</h4><div id="liveNews" class="text-[12px] muted">Lade aktuelle Meldungen (GDELT) …</div>
+          <div class="flex flex-wrap gap-1.5 mt-3">${LIVE_LINKS(name).map(([l, u]) => `<a class="chip btnchip" href="${u}" target="_blank" rel="noopener">${l} ↗</a>`).join('')}</div></div>`,
+      ch: `
+        <div class="card ch"><h4><svg viewBox="0 0 32 32" width="13" height="13"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>Bedeutung für die Schweiz</h4>
+          <div class="flex items-center gap-3 mb-2"><span class="text-[11px] muted">Relevanz</span>${meter(x, '#ff2d3a')}<span class="text-[11px] muted ml-2">Lage</span>${meter(r, RISK_COL[r])}<span class="text-[11px]" style="color:${RISK_COL[r]}">${RISK_TXT[r]}</span></div>
+          <p>${esc(val(d.ch) || `Geringe direkte Bezüge. Schweizer Interessen werden über die Botschaft der Region und multilaterale Kanäle wahrgenommen.`)}</p>
+          ${(d.tags || []).length ? `<div class="flex flex-wrap gap-1.5 mt-3">${d.tags.map(t => `<span class="chip" style="border-color:rgba(255,45,58,.35);color:#ffd6d9">${esc(t)}</span>`).join('')}</div>` : ''}</div>
+        ${conflicts.filter(c => window.CH_IMPACT?.[c.id]).map(c => `<div class="card"><h4><i data-lucide="shield-alert"></i>${esc(c.name)} – Folgen für die Schweiz</h4><p>${esc(window.CH_IMPACT[c.id])}</p></div>`).join('')}
+        <div class="card"><h4><i data-lucide="compass"></i>Einordnung aus Schweizer Sicht</h4><p>${esc(chStance(iso, d, b))}</p></div>
+        <div class="card"><h4><i data-lucide="plane"></i>Reisen & Auslandschweizer</h4><p>Massgebend sind die <a class="underline" href="https://www.eda.admin.ch/eda/de/home/vertretungen-und-reisehinweise.html" target="_blank" rel="noopener">Reisehinweise des EDA</a>. Bei längeren Aufenthalten Registrierung in der App «Travel Admin».</p></div>`,
+      geo: `
+        <div class="card"><h4><i data-lucide="mountain"></i>Topografie</h4><p>${esc(val(d.geo) || `${name} liegt in ${cont} (${p.SUBREGION}).`)}</p></div>
+        <div class="card"><h4><i data-lucide="users"></i>Nachbarn</h4><div class="flex flex-wrap gap-1.5 mt-1">${nbs.length ? nbs.map(n => `<button class="chip btnchip" data-goto="${n.ADM0_A3}">${flag(n.ISO_A2_EH || n.ISO_A2)} ${esc(n.NAME_DE || n.NAME)}</button>`).join('') : auto('Keine Landgrenzen (Insel- oder Küstenstaat).')}</div></div>
+        <div class="card"><h4><i data-lucide="crosshair"></i>Strategische Lage</h4><p>${esc(val(d.str) || `Region ${p.SUBREGION}; ${BLOCS[blocOf(iso)].name}.`)}</p></div>
+        <div class="card"><h4><i data-lucide="info"></i>Kenndaten</h4><div class="grid grid-cols-2 gap-y-1.5 text-[12px]">
+          <span class="muted">Kontinent</span><span>${esc(cont)}</span><span class="muted">Region</span><span>${esc(p.SUBREGION)}</span>
+          <span class="muted">Bevölkerung</span><span class="mono">${p.POP_EST ? fmtPop(p.POP_EST) : '—'}</span><span class="muted">BIP</span><span class="mono">${p.GDP_MD ? fmtGdp(p.GDP_MD) : '—'}</span>
+          <span class="muted">Einkommen</span><span>${INCOME_DE[String(p.INCOME_GRP || '')[0]] || '—'}</span><span class="muted">Wirtschaftstyp</span><span>${esc(String(p.ECONOMY || '').replace(/^\d\.\s*/, ''))}</span></div></div>`,
+      hist: `
+        <div class="card"><h4><i data-lucide="book-open"></i>Historischer Kontext</h4><p>${esc(val(d.hist) || '—')}</p></div>
+        <div class="card"><h4><i data-lucide="swords"></i>Prägende Konflikte</h4>${(d.hc || []).length ? d.hc.map(h => `<div class="flex gap-2.5 py-1.5 border-b hairline last:border-0 text-[13px]"><span class="dot mt-1.5" style="background:var(--amber)"></span><span>${esc(h)}</span></div>`).join('') : `<p>${auto('Keine kriegerischen Konflikte in jüngerer Geschichte.')}</p>`}</div>`,
+      pol: `
+        <div class="grid grid-cols-2 gap-2"><div class="card"><h4>System</h4><p class="!text-[12.5px]">${esc(val(d.sys) || '—')}</p></div><div class="card"><h4>Staatsoberhaupt</h4><p class="!text-[12.5px]">${esc(val(d.head) || '—')}</p></div></div>
+        <div class="card"><h4><i data-lucide="landmark"></i>Regierung</h4><p>${esc(val(d.gov) || '—')}</p></div>
+        <div class="card"><h4><i data-lucide="home"></i>Innenpolitische Lage</h4><p>${esc(val(d.dom) || 'Keine besonderen Entwicklungen.')}</p></div>
+        <div class="card"><h4><i data-lucide="globe-2"></i>Aussenpolitische Lage</h4><p>${esc(val(d.for) || 'Aussenpolitisch zurückhaltend.')}</p>
+          <div class="flex items-center gap-2 mt-3 text-[12px]"><span class="dot" style="background:${b.color}"></span><span>Block: <b>${b.name}</b></span></div><p class="!text-[11px] muted mt-1">${esc(b.desc)}</p></div>`,
+    };
+    this.openSidebar(`
+      <div class="relative p-5 pb-4 border-b hairline" style="background:linear-gradient(135deg, ${RISK_COL[r]}22, transparent 70%)">
+        <button data-close class="absolute top-4 right-4 muted hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="flex items-center gap-3">${flag(p.ISO_A2_EH || p.ISO_A2, 34)}<div class="min-w-0"><div class="text-xl font-semibold truncate">${esc(name)}</div><div class="text-[11px] muted truncate">${esc(p.FORMAL_DE || p.FORMAL_EN || p.NAME_LONG || '')}</div></div></div>
+        <div class="flex flex-wrap gap-1.5 mt-3">
+          <span class="chip" style="color:${RISK_COL[r]};border-color:${RISK_COL[r]}55">● Lage: ${RISK_TXT[r]}</span>
+          <span class="chip" style="color:#ffd6d9;border-color:rgba(255,45,58,.4)">CH-Relevanz ${x}/5</span>
+          <span class="chip"><span class="dot" style="background:${b.color}"></span>${b.name}</span>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-4">${[['Bevölkerung', p.POP_EST ? fmtPop(p.POP_EST) : '—'], ['BIP', p.GDP_MD ? fmtGdp(p.GDP_MD) : '—'], ['Führung', (val(d.gov) || val(d.head) || '—').split('(')[0]]].map(([l, v]) => `<div class="min-w-0"><div class="text-[10px] muted uppercase tracking-wider">${l}</div><div class="text-[12px] font-medium truncate" title="${esc(v)}">${esc(v)}</div></div>`).join('')}</div>
+      </div>
+      <div class="flex gap-4 px-5 border-b hairline overflow-x-auto" id="ctabs">${tabs.map(([k, l, ic], i) => `<button class="tab ${k === 'ch' ? 'ch' : ''} ${i === 0 ? 'on' : ''}" data-t="${k}">${ic ? `<i data-lucide="${ic}"></i>` : '<svg viewBox="0 0 32 32" width="13" height="13"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>'}${l}</button>`).join('')}</div>
+      <div class="flex-1 scroll p-4" id="ctabBody"></div>
+      ${iso === 'CHE' ? `<div class="p-3 border-t hairline"><button class="btn ch active w-full justify-center" id="openSwissFromPanel"><i data-lucide="maximize-2"></i>Schweiz-Ansicht öffnen</button></div>` : ''}`);
+    const show = (k) => {
+      $('#ctabBody').innerHTML = `<div class="space-y-3 fade-in">${bodies[k]}</div>`;
+      $('#ctabs').querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.t === k));
+      $('#ctabBody').querySelectorAll('[data-goto]').forEach(el => el.onclick = () => this.openCountry(el.dataset.goto));
+      $('#ctabBody').querySelectorAll('[data-conf]').forEach(el => el.onclick = () => this.openConflict(el.dataset.conf));
+      $('#ctabBody').querySelectorAll('[data-ev]').forEach(el => el.onclick = () => this.openEvent(+el.dataset.ev));
+      if (k === 'lage') loadLiveNews(p.NAME || name);
+      icons();
+    };
+    $('#ctabs').querySelectorAll('.tab').forEach(t => t.onclick = () => show(t.dataset.t));
+    show('lage');
+    $('#openSwissFromPanel')?.addEventListener('click', () => Swiss.open());
+  },
+
+  openConflict(id, fly = true) {
+    const c = CONFLICTS.find(x => x.id === id); if (!c) return;
+    setSelected(null); state.selectedConflict = id; if (state.leftTab === 'conf') this.renderLeft();
+    const zs = (window.ZONES?.zones.features || []).filter(z => z.properties.cid === id);
+    if (fly) {
+      if (id === 'ukr') map.fitBounds([[29, 44], [41, 52.5]], { padding: { left: innerWidth > 900 ? 380 : 20, right: innerWidth > 900 ? 470 : 20, top: 110, bottom: 100 }, duration: 1500 });
+      else if (zs.length) {
+        let b = [[180, 90], [-180, -90]];
+        zs.forEach(z => polysOf(z.geometry).forEach(p => p[0].forEach(([x, y]) => { b = [[Math.min(b[0][0], x), Math.min(b[0][1], y)], [Math.max(b[1][0], x), Math.max(b[1][1], y)]]; })));
+        map.fitBounds(b, { padding: { left: innerWidth > 900 ? 380 : 20, right: innerWidth > 900 ? 470 : 20, top: 110, bottom: 100 }, maxZoom: 7, duration: 1500 });
+      } else map.flyTo({ center: c.center, zoom: 4.6, duration: 1500 });
+    }
+    const col = INTENSITY_COLORS[c.intensity], ups = DataService.updatesFor(c);
+    const involved = c.countries.map(i => state.byIso[i]?.properties).filter(Boolean);
+    const days = Math.floor((DataService.stamp - new Date(c.since)) / 864e5);
+    const evIdx = EVENTS.map((e, i) => e.c === id ? i : -1).filter(i => i >= 0).sort((a, b) => (EVENTS[b].d || '').localeCompare(EVENTS[a].d || ''));
+    this.openSidebar(`
+      <div class="relative p-5 border-b hairline" style="background:linear-gradient(135deg, ${col}26, transparent 70%)">
+        <button data-close class="absolute top-4 right-4 muted hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="flex items-center gap-2 text-[11px] uppercase tracking-[.14em]" style="color:${col}"><span class="live-dot" style="background:${col}"></span>${INTENSITY_LABEL[c.intensity]} · ${esc(c.type)}</div>
+        <div class="text-xl font-semibold mt-1.5 pr-6">${esc(c.name)}</div><div class="text-[12px] muted mt-1">${esc(c.region)}</div>
+        <div class="grid grid-cols-3 gap-2 mt-4">
+          <div><div class="text-[10px] muted uppercase tracking-wider">Seit</div><div class="text-[13px] mono">${fmtDate(c.since)}</div></div>
+          <div><div class="text-[10px] muted uppercase tracking-wider">Dauer</div><div class="text-[13px] mono">${nf.format(days)} T.</div></div>
+          <div><div class="text-[10px] muted uppercase tracking-wider">Tote</div><div class="text-[11.5px]">${esc(c.tote2026 || '—')}</div></div>
+        </div>
+      </div>
+      <div class="flex-1 scroll p-4 space-y-3">
+        <div class="card"><h4><i data-lucide="activity"></i>Lage</h4><p><b style="color:${col}">${esc(c.status)}</b></p><p class="mt-2">${esc(c.summary)}</p>
+          ${id === 'ukr' ? `<p class="!text-[11px] muted mt-2">Frontverlauf: DeepStateMap (${esc(state.uaStamp || '…')})</p>` : ''}</div>
+        ${window.CH_IMPACT?.[id] ? `<div class="card ch"><h4><svg viewBox="0 0 32 32" width="13" height="13"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>Bedeutung für die Schweiz</h4><p>${esc(window.CH_IMPACT[id])}</p></div>` : ''}
+        <div class="card"><h4><i data-lucide="users"></i>Parteien</h4><div class="flex flex-wrap gap-1.5">${c.parties.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>
+          <h4 class="mt-3"><i data-lucide="flag"></i>Betroffene Staaten</h4><div class="flex flex-wrap gap-1.5">${involved.map(p => `<button class="chip btnchip" data-goto="${p.ADM0_A3}">${flag(p.ISO_A2_EH || p.ISO_A2)} ${esc(p.NAME_DE || p.NAME)}</button>`).join('')}</div></div>
+        ${evIdx.length ? `<div class="card"><h4><i data-lucide="crosshair"></i>Getroffene Orte (${evIdx.length})</h4><div class="-mx-2">${evIdx.map(i => this.evRow(i)).join('')}</div></div>` : ''}
+        ${zs.length ? `<div class="card"><h4><i data-lucide="map"></i>Zonen (Provinzgrenzen)</h4><div class="flex flex-wrap gap-1.5">${zs.map(z => `<span class="chip"><span class="dot" style="background:${ZONE_STATUS[z.properties.status].color}"></span>${esc(z.properties.name)}</span>`).join('')}</div><p class="!text-[11px] muted mt-2">Abgrenzung nach Verwaltungsregionen (Natural Earth 1:10 Mio.); Kontrollstatus gemäss Lageberichten.</p></div>` : ''}
+        <div class="card"><h4><i data-lucide="calendar-clock"></i>Lageverlauf</h4>
+          <div class="relative pl-4 mt-2 space-y-3 border-l hairline">${ups.map(u => `<div class="relative"><span class="absolute -left-[21px] top-1 dot" style="background:${u.user ? 'var(--cyan)' : col}"></span>
+            <div class="flex items-center gap-2 text-[10.5px]"><span class="mono muted">${fmtDate(u.date)}</span><span class="chip" style="font-size:10px">${esc(u.tag || 'Update')}</span>${srcLink(u.src)}</div><div class="text-[12.5px] mt-1">${esc(u.text)}</div></div>`).join('')}</div>
+          <div class="mt-4 flex gap-2"><input id="newUpdate" class="flex-1 px-3 py-2 text-[12.5px]" placeholder="Eigene Lagenotiz hinzufügen …" /><button class="btn" id="addUpdate"><i data-lucide="plus"></i></button></div>
+          <p class="text-[10.5px] muted mt-2">Notizen werden lokal im Browser gespeichert.</p></div>
+      </div>`);
+    const add = () => { const v = $('#newUpdate').value.trim(); if (!v) return; DataService.addUserUpdate(c.id, v); this.openConflict(c.id, false); };
+    $('#addUpdate').onclick = add; $('#newUpdate').onkeydown = (e) => { if (e.key === 'Enter') add(); };
+  },
+
+  openEvent(i) {
+    const x = EVENTS[i], T = EVENT_TYPES[x.t] || EVENT_TYPES.luft, c = CONFLICTS.find(k => k.id === x.c);
+    const iso = state.eventCountry[i], cp = iso && state.byIso[iso]?.properties;
+    map.flyTo({ center: x.coords, zoom: Math.max(map.getZoom(), x.t === 'flughafen' ? 11 : 9), duration: 1500, essential: true, padding: { left: innerWidth > 900 ? 360 : 0, right: innerWidth > 900 ? 460 : 0 } });
+    if (state.basemap === 'dark') { state.basemap = 'auto'; applyBasemap(); }
+    this.openSidebar(`
+      <div class="relative p-5 border-b hairline" style="background:linear-gradient(135deg, ${T.color}30, transparent 70%)">
+        <button data-close class="absolute top-4 right-4 muted hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="flex items-center gap-2 text-[11px] uppercase tracking-[.14em]" style="color:${T.color}"><span class="dot" style="background:${T.color}"></span>${T.label}</div>
+        <div class="text-xl font-semibold mt-1.5 pr-6">${esc(x.title)}</div>
+        <div class="text-[12px] muted mt-1">${fmtDate(x.d)} · <span class="mono">${x.coords[1].toFixed(3)}°, ${x.coords[0].toFixed(3)}°</span></div>
+      </div>
+      <div class="flex-1 scroll p-4 space-y-3">
+        ${x.cas ? `<div class="card" style="border-color:${T.color}55"><h4><i data-lucide="heart-pulse"></i>Opfer / Schaden</h4><p class="!text-[14px] font-semibold" style="color:#ffd0d4">${esc(x.cas)}</p></div>` : ''}
+        <div class="card"><h4><i data-lucide="file-text"></i>Ereignis</h4><p>${esc(x.txt)}</p>${x.src ? `<div class="mt-2">${srcLink(x.src, 'Quelle öffnen')}</div>` : ''}</div>
+        ${c ? `<div class="card conf-item" data-conf="${c.id}"><h4><i data-lucide="flame"></i>Konflikt</h4><div class="flex items-center gap-2"><span class="dot" style="background:${INTENSITY_COLORS[c.intensity]}"></span><b class="text-[13px]">${esc(c.name)}</b></div><div class="text-[11px] muted mt-1">${esc(c.status)}</div></div>` : ''}
+        ${cp ? `<div class="card"><h4><i data-lucide="flag"></i>Land</h4><button class="chip btnchip" data-goto="${cp.ADM0_A3}">${flag(cp.ISO_A2_EH || cp.ISO_A2)} ${esc(cp.NAME_DE)}</button></div>` : ''}
+        <p class="text-[10.5px] muted px-1">Koordinaten auf Orts-/Anlagenebene; «ca.» im Text kennzeichnet ungefähre Lage. Quellen: Wikipedia-Lageportale, Agenturmeldungen (Okt. 2026).</p>
+      </div>`);
+  },
+};
+
+// Schweizer Einordnung (pro-schweizerische Perspektive: Interessen, Neutralität, Gute Dienste)
+function chStance(iso, d, b) {
+  const parts = [];
+  if (b === BLOCS.neutral) parts.push('Gleichgesinnter neutraler Partner – gemeinsame Interessen bei Sicherheit ohne Bündnisbeitritt.');
+  if ((d.tags || []).some(t => /FHA|TEPA|CEPA|Mercosur/.test(t))) parts.push('Freihandelsabkommen sichern Schweizer Exporteuren Marktzugang – Ausbau und Umsetzung liegen im Schweizer Interesse.');
+  if ((d.tags || []).some(t => /Schutzmacht|Gute Dienste|Vermittler|NNSC|Genfer/.test(t))) parts.push('Hier kann die Schweiz ihre Stärke als glaubwürdige Vermittlerin und Schutzmacht ausspielen – die Neutralität ist ein Trumpf.');
+  if ((d.tags || []).some(t => /DEZA|Humanitär/.test(t))) parts.push('Schweizer Entwicklungs- und humanitäres Engagement stärkt Stabilität vor Ort und das Ansehen der Schweiz.');
+  if (d.r >= 4) parts.push('Hohe Instabilität: Schutz Schweizer Bürgerinnen, Bürger und Firmen vor Ort hat Priorität; Sanktions- und Sorgfaltspflichten konsequent einhalten.');
+  if (['nato', 'eu'].includes(blocOf(iso)) && d.x >= 4) parts.push('Wertepartner und wichtiger Markt – enge Kooperation bei Sicherheit und Wirtschaft, ohne die Neutralität aufzugeben.');
+  if (blocOf(iso) === 'russia') parts.push('Konfrontativer Akteur gegenüber dem Westen: Die Schweiz hält Kanäle offen, vollzieht aber Sanktionen und schützt ihre Souveränität vor Einflussoperationen.');
+  if (blocOf(iso) === 'china') parts.push('Wirtschaftlich bedeutend, politisch heikel: Diversifizierung der Lieferketten und klare Haltung bei Menschenrechten.');
+  if (!parts.length) parts.push('Begrenzte direkte Interessen; die Schweiz pflegt Beziehungen über multilaterale Gremien (UNO Genf) und regionale Botschaften.');
+  return parts.join(' ');
+}
+
+// Live-Schlagzeilen über GDELT (best effort; bei Rate-Limit oder Offline-Betrieb Fallback auf Links)
+async function loadLiveNews(nameEn) {
+  const box = $('#liveNews'); if (!box) return;
+  try {
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 8000);
+    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(`"${nameEn}"`)}&mode=artlist&maxrecords=8&format=json&sort=datedesc&timespan=3d`;
+    const r = await fetch(url, { signal: ctl.signal });
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    const arts = (j.articles || []).slice(0, 7);
+    if (!arts.length) throw new Error('leer');
+    if (!$('#liveNews')) return;
+    $('#liveNews').innerHTML = arts.map(a => `<a href="${esc(a.url)}" target="_blank" rel="noopener" class="block py-1.5 border-b hairline last:border-0 hover:text-white"><div class="text-[12.5px] text-[#dfe3ec] leading-snug">${esc(a.title)}</div><div class="text-[10px] muted">${esc(a.domain)} · ${esc((a.seendate || '').slice(0, 8).replace(/(\d{4})(\d{2})(\d{2})/, '$3.$2.$1'))}</div></a>`).join('');
+  } catch {
+    if ($('#liveNews')) $('#liveNews').innerHTML = 'Live-Abruf derzeit nicht möglich (GDELT-Limit oder offline). Direkt zu den Schweizer Medien:';
+  }
+}
+
+/* ---------- Suche ---------- */
+(function initSearch() {
+  const inp = $('#search'), res = $('#searchResults'); let idx = -1, items = [];
+  const render = () => {
+    const q = inp.value.trim().toLowerCase();
+    if (!q || !state.countries) { res.classList.add('hidden'); return; }
+    const cs = state.countries.features.map(f => f.properties).filter(p => (p.NAME_DE || '').toLowerCase().includes(q) || (p.NAME || '').toLowerCase().includes(q) || p.ADM0_A3.toLowerCase() === q).slice(0, 6)
+      .map(p => ({ kind: 'c', id: p.ADM0_A3, label: p.NAME_DE || p.NAME, sub: BLOCS[blocOf(p.ADM0_A3)].name, icon: flag(p.ISO_A2_EH || p.ISO_A2) }));
+    const ks = CONFLICTS.filter(c => c.name.toLowerCase().includes(q) || c.region.toLowerCase().includes(q)).slice(0, 4).map(c => ({ kind: 'k', id: c.id, label: c.name, sub: 'Konflikt', icon: `<span class="dot" style="background:${INTENSITY_COLORS[c.intensity]}"></span>` }));
+    const es = EVENTS.map((e, i) => ({ e, i })).filter(({ e }) => e.title.toLowerCase().includes(q)).slice(0, 4).map(({ e, i }) => ({ kind: 'e', id: i, label: e.title, sub: 'Ort', icon: `<span class="dot" style="background:${(EVENT_TYPES[e.t] || EVENT_TYPES.luft).color}"></span>` }));
+    items = [...cs, ...ks, ...es]; idx = -1;
+    res.innerHTML = items.map((it, i) => `<div class="px-3 py-2 flex items-center gap-2.5 cursor-pointer hover:bg-white/5 text-[13px]" data-i="${i}"><span class="w-5 text-center">${it.icon}</span><span class="flex-1 truncate">${esc(it.label)}</span><span class="text-[10.5px] muted">${esc(it.sub)}</span></div>`).join('') || '<div class="px-3 py-3 text-[12px] muted">Keine Treffer</div>';
+    res.classList.remove('hidden');
+    res.querySelectorAll('[data-i]').forEach(el => el.onmousedown = () => pick(+el.dataset.i));
+  };
+  const pick = (i) => { const it = items[i]; if (!it) return; it.kind === 'c' ? UI.openCountry(it.id) : it.kind === 'k' ? UI.openConflict(it.id) : UI.openEvent(it.id); inp.value = ''; res.classList.add('hidden'); inp.blur(); };
+  inp.addEventListener('input', render);
+  inp.addEventListener('blur', () => setTimeout(() => res.classList.add('hidden'), 150));
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(0, Math.min(items.length - 1, idx + (e.key === 'ArrowDown' ? 1 : -1))); res.querySelectorAll('[data-i]').forEach((el, i) => el.style.background = i === idx ? 'rgba(255,255,255,.07)' : ''); }
+    else if (e.key === 'Enter') pick(idx < 0 ? 0 : idx);
+    else if (e.key === 'Escape') inp.blur();
+  });
+})();
+
+/* ---------- Bindings ---------- */
+document.querySelectorAll('#projSeg button').forEach(b => b.onclick = () => setProjection(b.dataset.proj));
+document.querySelectorAll('#leftTabs button').forEach(b => b.onclick = () => { state.leftTab = b.dataset.lt; UI.renderLeft(); });
+$('#btnConflicts').onclick = () => { state.layers.conflicts = !state.layers.conflicts; applyLayerState(); UI.renderLayerPop(); };
+$('#btnBlocs').onclick = () => { state.layers.blocs = !state.layers.blocs; applyLayerState(); UI.renderLayerPop(); };
+$('#btnLayers').onclick = (e) => { e.stopPropagation(); $('#layersPop').classList.toggle('hidden'); $('#btnLayers').classList.toggle('active'); };
+document.addEventListener('click', (e) => { if (!$('#layersPop').contains(e.target) && !$('#btnLayers').contains(e.target)) { $('#layersPop').classList.add('hidden'); $('#btnLayers').classList.remove('active'); } });
+$('#btnSwiss').onclick = () => Swiss.open();
+$('#leftClose').onclick = () => { $('#leftPanel').classList.add('collapsed'); $('#leftToggle').classList.remove('hidden'); };
+$('#leftToggle').onclick = () => { $('#leftPanel').classList.remove('collapsed'); $('#leftToggle').classList.add('hidden'); };
+$('#exportBtn').onclick = () => DataService.export();
+$('#importFile').onchange = async (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  try { const j = JSON.parse(await file.text()); DataService.applyUpdate({ ...j, updated: j.updated || new Date().toISOString() }); onDataChanged(true); } catch (err) { alert('Ungültige JSON-Datei: ' + err.message); }
+  e.target.value = '';
+};
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); $('#search').focus(); }
+  if (e.key === 'Escape') { $('#swissView').classList.contains('open') ? Swiss.close() : UI.closeSidebar(); }
+  if (document.activeElement.tagName === 'INPUT') return;
+  if (e.key === 'g') setProjection(state.projection === 'globe' ? 'mercator' : 'globe');
+  if (e.key === 'b') $('#btnBlocs').click();
+  if (e.key === 's') Swiss.open();
+  if (e.key === 'k') { state.leftTab = 'conf'; UI.renderLeft(); }
+  if (e.key === 'l') { state.leftTab = 'news'; UI.renderLeft(); }
+  if (e.key === 'm') { state.leftTab = 'strat'; UI.renderLeft(); }
+});
+if (innerWidth < 900) { $('#leftPanel').classList.add('collapsed'); $('#leftToggle').classList.remove('hidden'); }
+
+/* ======================== 6. SCHWEIZ-MODUS ========================= */
+const Swiss = {
+  map: null, indicator: 'pop', poiOn: new Set(Object.keys(SWISS.poiCats)), hoverId: null,
+  open() { $('#swissView').classList.add('open'); $('#btnSwiss').classList.add('active'); this.render(); if (!this.map) setTimeout(() => this.initMap(), 60); else this.map.resize(); },
+  close() { $('#swissView').classList.remove('open'); $('#btnSwiss').classList.remove('active'); },
+
+  render() {
+    $('#chStand').textContent = SWISS.stand;
+    $('#chHeaderChips').innerHTML = `
+      <span class="chip"><span class="dot" style="background:#f8fafc"></span>Dauernd neutral – vom Volk bestätigt (27.9.)</span>
+      <span class="chip"><span class="dot" style="background:#5ee7ff"></span>OSZE-Vorsitz 2026</span>
+      <span class="chip"><span class="dot" style="background:#ff6b8b"></span>US-Zoll 12,5 %</span>
+      <span class="chip"><span class="dot" style="background:#ffb547"></span>Parmelin-Nachfolge offen</span>`;
+    $('#chIndicators').innerHTML = SWISS.indicators.map(k => `
+      <div class="card !p-3"><div class="text-[10px] uppercase tracking-wider muted leading-tight">${k.label}</div>
+        <div class="flex items-baseline gap-1 mt-1"><span class="text-xl font-semibold mono" style="color:${k.color}">${k.value}</span><span class="text-[11px] muted">${k.unit}</span></div>
+        <div class="mt-1 h-[24px]">${k.trend ? sparkline(k.trend, k.color) : `<div class="h-full flex items-center"><div class="h-1.5 w-full rounded" style="background:linear-gradient(90deg,${k.color},transparent)"></div></div>`}</div>
+        <div class="text-[9.5px] muted leading-tight">${esc(k.note)}</div></div>`).join('');
+    $('#chRadar').innerHTML = `<h4><svg viewBox="0 0 32 32" width="13" height="13"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>Lage-Radar: Auswirkungen auf die Schweiz</h4>
+      <div class="space-y-2">${SWISS.radar.map(r => `<div class="rounded-lg p-2.5" style="background:rgba(255,255,255,.03)"><div class="flex items-center justify-between"><span class="text-[12.5px] font-semibold">${esc(r.area)}</span><span class="flex items-center gap-1.5 text-[10px]" style="color:${RISK_COL[r.level]}">${meter(r.level, RISK_COL[r.level])}${RISK_TXT[r.level]}</span></div><div class="text-[11.8px] mt-1 text-[#cfd3de] leading-snug">${esc(r.text)}</div></div>`).join('')}</div>`;
+    const partyColor = { SVP: '#3ee6a8', SP: '#ff4d6d', FDP: '#5b9cff', Mitte: '#ffb547' };
+    $('#chGov').innerHTML = `<h4><i data-lucide="landmark"></i>Bundesrat 2026</h4>
+      <div class="grid grid-cols-2 gap-1.5">${SWISS.gov.map(g => `<div class="flex items-center gap-2 text-[12px] rounded-lg px-2 py-1.5" style="background:rgba(255,255,255,.03)" title="${esc(g.note || '')}"><span class="dot" style="background:${partyColor[g.party]}"></span><span class="flex-1 truncate">${esc(g.name)}${g.pres ? ' <span style="color:var(--ch)" class="text-[10px]">★ BP</span>' : g.vp ? ' <span class="text-[10px] muted">VP</span>' : ''}</span><span class="mono muted text-[10px]">${g.party}·${g.dept}</span></div>`).join('')}</div>
+      <div class="mt-3 text-[11.5px]"><span class="font-semibold">Nachfolge Parmelin</span> <span class="muted">(Rücktritt Ende Dez.; SVP-Fraktion entscheidet am 20.11.):</span></div>
+      <div class="flex flex-wrap gap-1 mt-1.5">${SWISS.succession.map(n => `<span class="chip">${esc(n)}</span>`).join('')}</div>`;
+    const st = { 'in Kraft': ['#3ee6a8', 'rgba(62,230,168,.14)'], 'im Parlament': ['#ffb547', 'rgba(255,181,71,.14)'], 'abgebrochen': ['#ff4d6d', 'rgba(255,77,109,.14)'], 'genehmigt': ['#5ee7ff', 'rgba(94,231,255,.14)'], 'unterzeichnet': ['#a78bfa', 'rgba(167,139,250,.14)'], 'Konflikt': ['#ff4d6d', 'rgba(255,77,109,.14)'] };
+    $('#chBilateral').innerHTML = `<h4><i data-lucide="handshake"></i>Verträge: EU-Paket & Freihandel</h4><div>${SWISS.bilateral.map(t => { const [c, bg] = st[t.status] || ['#aaa', 'rgba(255,255,255,.06)'];
+      return `<details class="border-b hairline last:border-0 py-2"><summary class="flex items-center gap-2 cursor-pointer list-none text-[12.5px]"><span class="mono muted text-[10.5px] w-[76px] flex-none">${esc(t.year)}</span><span class="flex-1">${esc(t.name)}</span><span class="status-pill" style="color:${c};background:${bg}">${esc(t.status)}</span></summary>${t.detail ? `<div class="text-[11.5px] muted mt-1.5 pl-[84px]">${esc(t.detail)}</div>` : ''}</details>`; }).join('')}</div>`;
+    $('#chNeutrality').innerHTML = `<h4><i data-lucide="shield"></i>Neutralität</h4>
+      <p>Bewaffnete, dauernde und völkerrechtlich anerkannte Neutralität. Die Schweiz bleibt militärisch bündnisfrei, setzt Völkerrecht und Sanktionen konsequent um und nutzt ihre Glaubwürdigkeit für Gute Dienste – ein Kurs, den das Stimmvolk am 27.9.2026 mit über 70 % bestätigt hat.</p>
+      <div class="mt-3 relative pl-4 border-l hairline space-y-2">${SWISS.neutrality.map(n => `<div class="relative text-[12.3px]"><span class="absolute -left-[21px] top-1.5 dot" style="background:var(--ch)"></span><span class="mono mr-2" style="color:var(--ch)">${n.year}</span>${esc(n.text)}</div>`).join('')}</div>`;
+    $('#chForeign').innerHTML = `<h4><i data-lucide="globe-2"></i>Aussenpolitik & Schutzmachtmandate</h4>
+      <div class="grid grid-cols-2 gap-2">${SWISS.foreign.map(f => `<div class="rounded-lg p-2.5" style="background:rgba(255,255,255,.03)"><div class="text-[11.5px] font-semibold">${esc(f.k)}</div><div class="text-[11.3px] muted mt-0.5 leading-snug">${esc(f.v)}</div></div>`).join('')}</div>
+      <div class="flex flex-wrap gap-1.5 mt-3">${SWISS.mandates.map(m => `<span class="chip">${esc(m)}</span>`).join('')}</div>`;
+    const vs = { 'Kommend': '#ffb547', 'Abgelehnt': '#ff6b8b', 'Angenommen': '#3ee6a8', 'GV angenommen': '#3ee6a8' };
+    $('#chVotes').innerHTML = `<h4><i data-lucide="vote"></i>Volksabstimmungen 2026</h4>${SWISS.votes.map(v => `<div class="flex items-center gap-2 py-1.5 border-b hairline last:border-0 text-[12.2px]"><span class="mono muted text-[10.5px] w-[70px] flex-none">${esc(v.date)}</span><span class="flex-1 leading-snug">${esc(v.title)}</span><span class="text-[10.5px] muted">${esc(v.poll)}</span><span class="status-pill" style="color:${vs[v.status]};background:${vs[v.status]}22">${esc(v.status)}</span></div>`).join('')}`;
+    $('#chSources').innerHTML = `<h4><i data-lucide="link"></i>Schweizer Quellen</h4><div class="flex flex-wrap gap-1.5">${[['admin.ch', 'https://www.admin.ch'], ['EDA', 'https://www.eda.admin.ch'], ['Parlament', 'https://www.parlament.ch'], ['VBS', 'https://www.vbs.admin.ch'], ['SECO', 'https://www.seco.admin.ch'], ['SNB', 'https://www.snb.ch'], ['SRF News', 'https://www.srf.ch/news'], ['NZZ', 'https://www.nzz.ch'], ['swissinfo', 'https://www.swissinfo.ch/ger'], ['Keystone-SDA', 'https://www.keystone-sda.ch']].map(([l, u]) => `<a class="chip btnchip" href="${u}" target="_blank" rel="noopener">${l} ↗</a>`).join('')}</div>`;
+    const items = SWISS.news.map(n => `<span class="inline-flex items-center gap-2"><span class="chip mono" style="font-size:10px;color:#ffb3b8">${esc(n.tag)}</span><span class="text-[#cfd3de]">${esc(n.text)}</span></span>`).join('<span class="muted">✚</span>');
+    $('#chTicker').innerHTML = items + '<span class="muted">✚</span>' + items;
+    $('#chPoiFilters').innerHTML = Object.entries(SWISS.poiCats).map(([k, v]) => `<button class="chip btnchip" data-cat="${k}" style="${this.poiOn.has(k) ? '' : 'opacity:.4'}"><span class="dot" style="background:${v.color}"></span>${v.label}</button>`).join('');
+    $('#chPoiFilters').querySelectorAll('[data-cat]').forEach(b => b.onclick = () => {
+      const k = b.dataset.cat; this.poiOn.has(k) ? this.poiOn.delete(k) : this.poiOn.add(k); b.style.opacity = this.poiOn.has(k) ? 1 : .4;
+      ['poi-core', 'poi-halo'].forEach(id => this.map?.setFilter(id, ['in', ['get', 'cat'], ['literal', [...this.poiOn]]]));
+    });
+    document.querySelectorAll('#chIndicatorSeg button').forEach(b => b.onclick = () => this.setIndicator(b.dataset.ind));
+    this.renderLegend(); icons();
+  },
+  cantonFill() {
+    if (this.indicator === 'pop') return ['interpolate', ['linear'], ['get', 'pop'], 15, '#1b2433', 200, '#2c4a6b', 600, '#3f7fb6', 1600, '#5ee7ff'];
+    if (this.indicator === 'unemp') return ['interpolate', ['linear'], ['get', 'unemp'], .5, '#1d2b25', 2, '#3a7a5c', 3, '#ffb547', 4.5, '#ff4d6d'];
+    return ['match', ['get', 'lang'], 'de', '#5b9cff', 'fr', '#a78bfa', 'it', '#3ee6a8', '#ffb547'];
+  },
+  renderLegend() {
+    const L = {
+      pop: '<div class="h-2 rounded" style="background:linear-gradient(90deg,#1b2433,#2c4a6b,#3f7fb6,#5ee7ff)"></div><div class="flex justify-between muted mt-1"><span>15 Tsd.</span><span>1,6 Mio.</span></div>',
+      unemp: '<div class="h-2 rounded" style="background:linear-gradient(90deg,#1d2b25,#3a7a5c,#ffb547,#ff4d6d)"></div><div class="flex justify-between muted mt-1"><span>0,5 %</span><span>4,5 %</span></div>',
+      lang: `<div class="flex flex-wrap gap-x-2.5 gap-y-1">${[['Deutsch', '#5b9cff'], ['Französisch', '#a78bfa'], ['Italienisch', '#3ee6a8'], ['Mehrsprachig', '#ffb547']].map(([l, c]) => `<span class="flex items-center gap-1"><span class="dot" style="background:${c}"></span>${l}</span>`).join('')}</div>`,
+    };
+    $('#chLegend').innerHTML = L[this.indicator];
+  },
+  setIndicator(k) {
+    this.indicator = k;
+    document.querySelectorAll('#chIndicatorSeg button').forEach(b => b.classList.toggle('on', b.dataset.ind === k));
+    this.map?.setPaintProperty('cantons-fill', 'fill-color', this.cantonFill()); this.renderLegend();
+  },
+  initMap() {
+    this.map = new maplibregl.Map({
+      container: 'swissMap',
+      style: { version: 8,
+        sources: { relief: { type: 'raster', tiles: ESRI('World_Topo_Map'), tileSize: 256, maxzoom: 18, attribution: CONFIG.attribution }, sat: { type: 'raster', tiles: ESRI('World_Imagery'), tileSize: 256, maxzoom: 18 }, ref: { type: 'raster', tiles: ESRI('Reference/World_Boundaries_and_Places'), tileSize: 256, maxzoom: 18 } },
+        layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#0a0a0a' } },
+          { id: 'sat', type: 'raster', source: 'sat', paint: { 'raster-opacity': .95, 'raster-saturation': -.15 } }] },
+      bounds: [[5.9, 45.8], [10.5, 47.85]],
+      fitBoundsOptions: { padding: { top: 30, bottom: 30, left: innerWidth > 900 ? 255 : 20, right: 20 } },
+      attributionControl: { compact: true }, maxBounds: [[3.5, 44.8], [12.8, 48.9]],
+    });
+    this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    this.map.on('load', async () => {
+      try {
+        const topo = await (await fetch(CONFIG.swissTopoUrl)).json();
+        const cantons = topojson.feature(topo, topo.objects.cantons);
+        cantons.features.forEach(f => { const d = SWISS.cantons[f.id] || []; f.properties = { bfs: f.id, code: d[0], name: d[1], capital: d[2], pop: d[3], lang: d[4], unemp: d[5] }; });
+        this.map.addSource('cantons', { type: 'geojson', data: cantons, promoteId: 'bfs' });
+        this.map.addSource('lakes', { type: 'geojson', data: topojson.feature(topo, topo.objects.lakes) });
+        this.map.addSource('ch', { type: 'geojson', data: topojson.feature(topo, topo.objects.country) });
+        this.map.addLayer({ id: 'cantons-fill', type: 'fill', source: 'cantons', paint: { 'fill-color': this.cantonFill(), 'fill-color-transition': { duration: 500 }, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, ['case', ['boolean', ['feature-state', 'hover'], false], .7, .45], 10, ['case', ['boolean', ['feature-state', 'hover'], false], .35, .12]] } });
+        this.map.addLayer({ id: 'cantons-line', type: 'line', source: 'cantons', paint: { 'line-color': '#ffffff', 'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], .95, .45], 'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 2, .8] } });
+        this.map.addLayer({ id: 'lakes', type: 'fill', source: 'lakes', paint: { 'fill-color': '#0c3a52', 'fill-opacity': .55 } });
+        this.map.addLayer({ id: 'ref', type: 'raster', source: 'ref' });
+        this.map.addLayer({ id: 'ch-glow', type: 'line', source: 'ch', paint: { 'line-color': '#ff2d3a', 'line-width': 8, 'line-blur': 6, 'line-opacity': .5 } });
+        this.map.addLayer({ id: 'ch-line', type: 'line', source: 'ch', paint: { 'line-color': '#ff6b73', 'line-width': 1.8 } });
+        const pois = { type: 'FeatureCollection', features: SWISS.pois.map((p, i) => ({ type: 'Feature', properties: { ...p, coords: undefined, color: SWISS.poiCats[p.cat].color, i }, geometry: { type: 'Point', coordinates: p.coords } })) };
+        this.map.addSource('pois', { type: 'geojson', data: pois });
+        this.map.addLayer({ id: 'poi-halo', type: 'circle', source: 'pois', paint: { 'circle-color': ['get', 'color'], 'circle-radius': 13, 'circle-opacity': .22, 'circle-blur': .5 } });
+        this.map.addLayer({ id: 'poi-core', type: 'circle', source: 'pois', paint: { 'circle-color': ['get', 'color'], 'circle-radius': 6, 'circle-stroke-color': '#0a0a0a', 'circle-stroke-width': 1.6 } });
+        this.bindEvents();
+      } catch (e) { console.error(e); $('#cantonCard').classList.remove('hidden'); $('#cantonCard').innerHTML = '<span style="color:var(--red)">Kantonsdaten konnten nicht geladen werden.</span>'; }
+    });
+  },
+  bindEvents() {
+    const m = this.map, tip = $('#tooltip');
+    const setHover = (id) => { if (this.hoverId === id) return; if (this.hoverId != null) m.setFeatureState({ source: 'cantons', id: this.hoverId }, { hover: false }); this.hoverId = id; if (id != null) m.setFeatureState({ source: 'cantons', id }, { hover: true }); };
+    m.on('mousemove', (e) => {
+      const poi = m.queryRenderedFeatures(e.point, { layers: ['poi-core'] })[0], f = m.queryRenderedFeatures(e.point, { layers: ['cantons-fill'] })[0];
+      m.getCanvas().style.cursor = poi || f ? 'pointer' : '';
+      if (poi) { setHover(null); tip.innerHTML = `<div class="flex items-center gap-2"><span class="dot" style="background:${poi.properties.color}"></span><b>${esc(poi.properties.name)}</b></div><div class="text-[11px] muted mt-0.5">${esc(SWISS.poiCats[poi.properties.cat].label)}</div>`; }
+      else if (f) { setHover(f.id); const p = f.properties; tip.innerHTML = `<b>${esc(p.name)}</b> <span class="mono muted">${esc(p.code)}</span><div class="text-[11px] muted mt-0.5">${nf.format(p.pop)} Tsd. Einw. · ALQ ${p.unemp} %</div>`; }
+      else { setHover(null); tip.classList.remove('show'); return; }
+      tip.classList.add('show');
+      tip.style.left = Math.min(e.originalEvent.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = (e.originalEvent.clientY + 14) + 'px';
+    });
+    m.on('mouseout', () => { setHover(null); tip.classList.remove('show'); });
+    m.on('click', (e) => {
+      const poi = m.queryRenderedFeatures(e.point, { layers: ['poi-core'] })[0];
+      if (poi) { const p = poi.properties; new maplibregl.Popup({ offset: 12, maxWidth: '270px' }).setLngLat(poi.geometry.coordinates).setHTML(`<div class="text-[10px] uppercase tracking-wider" style="color:${p.color}">${esc(SWISS.poiCats[p.cat].label)}</div><div class="font-semibold text-[13px] mt-0.5">${esc(p.name)}</div><div class="text-[12px] muted mt-1">${esc(p.desc)}</div>`).addTo(m); return; }
+      const f = m.queryRenderedFeatures(e.point, { layers: ['cantons-fill'] })[0];
+      if (f) this.showCanton(f.properties);
+    });
+  },
+  showCanton(p) {
+    const avg = Object.values(SWISS.cantons).reduce((s, c) => s + c[5], 0) / 26;
+    const langDe = { de: 'Deutsch', fr: 'Französisch', it: 'Italienisch', 'de/fr': 'Deutsch / Französisch', 'fr/de': 'Französisch / Deutsch', 'de/rm/it': 'Deutsch / Rätoromanisch / Italienisch' };
+    const card = $('#cantonCard'); card.classList.remove('hidden');
+    card.innerHTML = `<div class="flex items-center gap-2"><span class="mono text-[11px] px-1.5 py-0.5 rounded" style="background:rgba(255,45,58,.18);color:#ffb3b8">${esc(p.code)}</span><b class="text-[14px]">Kanton ${esc(p.name)}</b><button class="ml-auto muted hover:text-white" id="cantonClose"><i data-lucide="x" class="w-4 h-4"></i></button></div>
+      <div class="grid grid-cols-3 gap-2 mt-2.5 text-[12px]"><div><div class="text-[10px] muted uppercase">Hauptort</div>${esc(p.capital)}</div><div><div class="text-[10px] muted uppercase">Einwohner</div><span class="mono">${nf.format(p.pop)}k</span></div><div><div class="text-[10px] muted uppercase">ALQ</div><span class="mono" style="color:${p.unemp > avg ? 'var(--amber)' : 'var(--green)'}">${p.unemp} %</span></div></div>
+      <div class="text-[11.5px] muted mt-2">Amtssprache(n): ${esc(langDe[p.lang] || p.lang)}</div>
+      <div class="flex gap-1.5 mt-2.5 flex-wrap"><a class="chip btnchip" target="_blank" rel="noopener" href="https://www.ch.ch/de/demokratie/foderalismus/kantone/">Kantonsportal ↗</a><a class="chip btnchip" target="_blank" rel="noopener" href="https://www.srf.ch/suche?q=${encodeURIComponent('Kanton ' + p.name)}">SRF-News ↗</a></div>`;
+    $('#cantonClose').onclick = () => card.classList.add('hidden'); icons();
+  },
+};
+$('#swissClose').onclick = () => Swiss.close();
+const swissResponsive = () => { $('#swissGrid').style.gridTemplateColumns = innerWidth < 1000 ? '1fr' : 'minmax(0,1.3fr) minmax(0,1fr)'; $('#swissGrid').style.overflowY = innerWidth < 1000 ? 'auto' : ''; };
+addEventListener('resize', swissResponsive); swissResponsive();
+icons();
+</script>
+</body>
+</html>

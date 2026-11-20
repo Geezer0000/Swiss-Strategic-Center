@@ -1,0 +1,15 @@
+{
+  "model": "qwen2.5:7b",
+  "ollama_url": "http://127.0.0.1:11434",
+  "ollama_exe": "%LOCALAPPDATA%\\Programs\\Ollama\\ollama.exe",
+  "days_back": 3,
+  "keep_days": 14,
+  "event_keep_days": 14,
+  "batch_size": 4,
+  "max_new_items_per_run": 60,
+  "user_agent": "SwissStrategicCenter/1.0 (persoenliches Lage-Dashboard; lokaler Updater)",
+  "swiss_feeds": [
+    "https://www.srf.ch/news/bnf/rss/1646",
+    "https://www.nzz.ch/schweiz.rss"
+  ]
+}

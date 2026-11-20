@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Temporäre Dateien & Locks
+*.tmp
+updater/ssc.lock
+updater/updater.log
+
+# Altes verschachteltes Test-Verzeichnis
+Strategic center/

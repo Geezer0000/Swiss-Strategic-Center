@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="de-CH">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a0a" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Swiss Strategic Center</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ff2d3a'/%3E%3Cpath d='M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z' fill='%23fff'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root { --bg: #0a0a0a; --glass: rgba(16,18,24,.82); --line: rgba(255,255,255,.09); --text: #e8eaf0; --muted: #8a90a2;
+    --ch: #ff2d3a; --cyan: #5ee7ff; --red: #ff4d6d; --amber: #ffb547; --green: #3ee6a8; --nav: 62px; --top: 52px; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; overflow: hidden; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  a { color: #9fdcff; }
+  .glass { background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--line); }
+  .muted { color: var(--muted); } .mono { font-family: ui-monospace, "JetBrains Mono", Consolas, monospace; }
+  .dot { width: 8px; height: 8px; border-radius: 9px; display: inline-block; flex: none; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--line); background: rgba(255,255,255,.04); white-space: nowrap; }
+  .chip.btn { cursor: pointer; } .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .meter { display: inline-flex; gap: 2px; vertical-align: middle; } .meter i { width: 11px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.13); }
+
+  #top { position: fixed; top: 0; left: 0; right: 0; height: calc(var(--top) + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 12px 0; display: flex; align-items: center; gap: 10px; z-index: 1000; border-width: 0 0 1px; }
+  #top .brand { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
+  #top .brand b { font-size: 13px; letter-spacing: .06em; white-space: nowrap; }
+  #top .brand small { display: block; font-size: 10.5px; color: var(--muted); }
+  .iconbtn { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; border: 1px solid var(--line); background: rgba(255,255,255,.04); font-size: 16px; }
+  #ticker { position: fixed; top: calc(var(--top) + env(safe-area-inset-top)); left: 0; right: 0; height: 30px; z-index: 999; overflow: hidden; display: flex; align-items: center; font-size: 12px; border-width: 0 0 1px; }
+  #ticker .lbl { padding: 0 10px; font-weight: 700; font-size: 10.5px; letter-spacing: .14em; color: var(--red); flex: none; }
+  #ticker .track { display: inline-flex; gap: 28px; white-space: nowrap; padding-left: 100%; animation: tick 95s linear infinite; }
+  #ticker:hover .track { animation-play-state: paused; }
+  #ticker .tag { color: var(--cyan); font-weight: 600; font-size: 10.5px; margin-right: 6px; }
+  @keyframes tick { to { transform: translateX(-100%); } }
+
+  #map { position: fixed; top: calc(var(--top) + 30px + env(safe-area-inset-top)); left: 0; right: 0; bottom: calc(var(--nav) + env(safe-area-inset-bottom)); background: #0a0a0a; }
+  .leaflet-container { background: #0a0a0a; font: inherit; }
+  .leaflet-control-attribution { background: rgba(10,10,10,.6) !important; color: #777 !important; font-size: 9px !important; }
+  .leaflet-control-attribution a { color: #999 !important; }
+  .leaflet-bar a { background: var(--glass) !important; color: var(--text) !important; border-color: var(--line) !important; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: rgba(16,18,24,.95); color: var(--text); }
+  .leaflet-popup-content { margin: 10px 12px; font-size: 12.5px; }
+
+  nav#tabs { position: fixed; left: 0; right: 0; bottom: 0; height: calc(var(--nav) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); display: grid; grid-template-columns: repeat(6, 1fr); z-index: 1001; border-width: 1px 0 0; }
+  nav#tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; color: var(--muted); padding: 4px 1px; }
+  nav#tabs button span { font-size: 15px; line-height: 1; }
+  nav#tabs button.on { color: var(--text); }
+  nav#tabs button.on span { filter: drop-shadow(0 0 6px rgba(255,45,58,.6)); }
+
+  #panel { position: fixed; left: 0; right: 0; bottom: calc(var(--nav) + env(safe-area-inset-bottom)); max-height: 68vh; z-index: 1000; border-radius: 18px 18px 0 0; border-width: 1px 1px 0; display: flex; flex-direction: column; transform: translateY(110%); transition: transform .32s cubic-bezier(.2,.8,.2,1); }
+  #panel.open { transform: none; }
+  #panel .grab { width: 40px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.25); margin: 8px auto 2px; flex: none; }
+  #phead { display: flex; align-items: center; gap: 8px; padding: 4px 14px 8px; flex: none; }
+  #phead h2 { font-size: 16px; margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #pbody { overflow-y: auto; padding: 0 14px 16px; -webkit-overflow-scrolling: touch; }
+  .card { border: 1px solid var(--line); background: rgba(255,255,255,.03); border-radius: 13px; padding: 11px 12px; margin-top: 9px; }
+  .card h4 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .card p { margin: 0; font-size: 13.2px; color: #d5d9e3; }
+  .card.ch { border-color: rgba(255,45,58,.38); background: linear-gradient(135deg, rgba(255,45,58,.1), rgba(255,255,255,.02)); }
+  .row { display: flex; gap: 9px; align-items: flex-start; padding: 9px 2px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .row:last-child { border-bottom: 0; } .row:active { background: rgba(255,255,255,.04); }
+  .row .t { font-size: 13.5px; font-weight: 600; line-height: 1.3; } .row .s { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .row .dot { margin-top: 5px; }
+  .ptabs { display: flex; gap: 14px; overflow-x: auto; border-bottom: 1px solid var(--line); margin: 2px 0 2px; scrollbar-width: none; }
+  .ptabs button { padding: 8px 0; font-size: 12.5px; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .ptabs button.on { color: var(--text); border-color: var(--cyan); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .kpi { border: 1px solid var(--line); border-radius: 11px; padding: 8px 9px; background: rgba(255,255,255,.03); }
+  .kpi .l { font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); line-height: 1.2; }
+  .kpi .v { font-size: 18px; font-weight: 700; margin-top: 2px; } .kpi .n { font-size: 9.5px; color: var(--muted); line-height: 1.2; }
+  .tl { border-left: 1px solid var(--line); margin: 4px 0 0 4px; padding-left: 12px; }
+  .tl > div { position: relative; padding: 5px 0; font-size: 12.8px; }
+  .tl > div::before { content: ""; position: absolute; left: -16px; top: 11px; width: 7px; height: 7px; border-radius: 7px; background: var(--c, var(--red)); }
+  .tl .d { font-size: 10.5px; color: var(--muted); }
+  #search { width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--text); font-size: 15px; outline: none; }
+  .flag { height: 14px; border-radius: 2px; vertical-align: -2px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+  #legend { position: fixed; right: 10px; top: calc(var(--top) + 40px + env(safe-area-inset-top)); z-index: 998; border-radius: 12px; padding: 7px 9px; font-size: 10.5px; display: none; }
+  #legend div { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
+  #toast { position: fixed; left: 50%; top: calc(var(--top) + 40px + env(safe-area-inset-top)); transform: translate(-50%, -8px); opacity: 0; z-index: 1100; padding: 8px 12px; border-radius: 11px; font-size: 12.5px; transition: .3s; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #loading { position: fixed; inset: 0; z-index: 2000; background: #0a0a0a; display: grid; place-items: center; text-align: center; transition: opacity .5s; }
+  #loading.hide { opacity: 0; pointer-events: none; }
+
+  /* PC: Panel als Seitenleiste links, Navigation oben */
+  @media (min-width: 820px) {
+    :root { --nav: 0px; }
+    #ticker { left: 400px; }
+    #map { left: 400px; top: calc(var(--top) + 30px); bottom: 0; }
+    #panel { top: var(--top); bottom: 0; left: 0; right: auto; width: 400px; max-height: none; border-radius: 0; border-width: 0 1px 0 0; transform: none; }
+    #panel .grab { display: none; }
+    nav#tabs { position: fixed; top: 9px; bottom: auto; left: auto; right: 64px; width: 560px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 11px; grid-template-columns: repeat(6, 1fr); }
+    nav#tabs button { flex-direction: row; gap: 4px; font-size: 11px; } nav#tabs button span { font-size: 13px; }
+    #legend { display: block; }
+  }
+</style>
+</head>
+<body>
+<header id="top" class="glass">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="30" height="30"><rect width="32" height="32" rx="7" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>
+    <div style="min-width:0"><b>SWISS STRATEGIC <span style="color:var(--ch)">CENTER</span></b><small id="stand">Lagebild</small></div>
+  </div>
+  <button class="iconbtn" id="bmBtn" title="Kartenansicht wechseln">🛰️</button>
+</header>
+<div id="ticker" class="glass"><span class="lbl">LAGE</span><div style="overflow:hidden;flex:1"><div class="track" id="track"></div></div></div>
+<div id="map"></div>
+<div id="legend" class="glass"></div>
+<section id="panel" class="glass"><div class="grab"></div><div id="phead"></div><div id="pbody"></div></section>
+<nav id="tabs" class="glass">
+  <button data-v="map" class="on"><span>🗺️</span>Karte</button>
+  <button data-v="conf"><span>🔥</span>Konflikte</button>
+  <button data-v="news"><span>📰</span>Lage</button>
+  <button data-v="strat"><span>⚔️</span>Strategie</button>
+  <button data-v="ch"><span><svg viewBox="0 0 32 32" width="16" height="16" style="vertical-align:-2px"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg></span>Schweiz</button>
+  <button data-v="find"><span>🔎</span>Länder</button>
+</nav>
+<div id="toast" class="glass"></div>
+<div id="loading"><div><svg viewBox="0 0 32 32" width="56" height="56"><rect width="32" height="32" rx="7" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>
+  <div style="margin-top:12px;letter-spacing:.3em;font-size:12px">SWISS STRATEGIC CENTER</div><div class="muted" id="loadmsg" style="font-size:12px;margin-top:6px">Lade Lagebild …</div></div></div>
+
+<!-- Komprimierte Daten (gzip + base64): Länder, Konflikte, Ereignisse, Schweiz, Geodaten -->
+<script id="payload" type="application/octet-stream">/*__PAYLOAD__*/</script>
+<script>
+/* Swiss Strategic Center – Export-Version für Handy und PC (eine Datei, Daten eingebettet).
+   Erzeugt von export/build_export.py; Stand siehe Kopfzeile. */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+const fmtDate = (d) => { if (!d) return ''; const p = d.split('-'); return p.length === 3 ? `${+p[2]}.${+p[1]}.${p[0]}` : p.length === 2 ? `${+p[1]}/${p[0]}` : d; };
+const daysAgo = (d) => { if (!d || d.length < 10) return 999; return Math.floor(((S.stamp || new Date()) - new Date(d + 'T12:00:00')) / 864e5); };
+const INT_COL = { 1: '#ffd166', 2: '#ffb547', 3: '#ff8a4c', 4: '#ff5a5f', 5: '#ff2d6f' };
+const INT_TXT = { 1: 'Niedrig', 2: 'Spannung', 3: 'Mittel', 4: 'Hoch', 5: 'Krieg' };
+const RISK_COL = { 1: '#3ee6a8', 2: '#a3e635', 3: '#ffb547', 4: '#ff7a45', 5: '#ff2d6f' };
+const RISK_TXT = { 1: 'Stabil', 2: 'Leicht erhöht', 3: 'Erhöht', 4: 'Hoch', 5: 'Kritisch' };
+const ZONE = { besetzt: ['Besetzt', '#e0002a'], grauzone: ['Grauzone', '#b8a9a9'], kampf: ['Aktive Kämpfe', '#ff3355'], kontrolle: ['Kontrolle nichtstaatl. Akteur', '#c04dff'],
+  spannung: ['Angriffe / Spannung', '#ffaa33'], separatisten: ['Separatisten', '#b0446b'], epidemie: ['Epidemie', '#39d98a'] };
+const EV = { flughafen: ['Flughafen getroffen', '#ff1f3d'], luft: ['Luft-/Raketenangriff', '#ff4d4d'], drohne: ['Drohnenangriff', '#ff7a45'], schiff: ['Schiff angegriffen', '#4dc3ff'],
+  gefecht: ['Gefecht', '#ff9f1a'], anschlag: ['Anschlag', '#ffd23f'], unruhen: ['Unruhen', '#f472b6'], epidemie: ['Ebola', '#39d98a'], abfang: ['Abfang', '#94a3b8'] };
+const BLOC = { CHE: 'Neutral', LIE: 'Neutral' };
+const CHX = '<svg viewBox="0 0 32 32" width="14" height="14" style="vertical-align:-2px"><rect width="32" height="32" rx="6" fill="#ff2d3a"/><path d="M13 6h6v7h7v6h-7v7h-6v-7H6v-6h7z" fill="#fff"/></svg>';
+const meter = (n, c) => `<span class="meter">${[1, 2, 3, 4, 5].map(i => `<i style="${i <= n ? `background:${c}` : ''}"></i>`).join('')}</span>`;
+const flag = (a2, h = 14) => a2 ? `<img class="flag" style="height:${h}px" src="https://flagcdn.com/h40/${a2.toLowerCase()}.png" alt="" loading="lazy">` : '';
+const val = (s) => s && s !== '—' ? s : '';
+const srcA = (u) => (typeof u === 'string' && /^https?:\/\//.test(u)) ? ` <a href="${esc(u)}" target="_blank" rel="noopener">Quelle ↗</a>` : '';
+
+let D = {}; // Datenstand
+const S = { view: 'map', stack: [], bm: 'auto', stamp: null };
+
+async function loadPayload() {
+  const b64 = $('#payload').textContent.trim();
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const text = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  const s = document.createElement('script'); s.textContent = text; document.head.appendChild(s);
+}
+
+// Basisdaten + laufendes Update zusammenführen (gleiche Logik wie die Hauptanwendung)
+function mergeData() {
+  const u = window.SSC_UPDATE || {};
+  S.stamp = new Date(u.updated || '2026-10-25T12:00:00');
+  const maxDays = 14, maxNewsDays = 14;
+  const C = (window.CONFLICTS || []).filter(c => c.id !== 'unrest');
+  let E = (window.EVENTS || []).filter(e => e.c !== 'unrest' && daysAgo(e.d) <= maxDays);
+  const CO = window.COUNTRIES || {}, SW = window.SWISS || {};
+  let news = (window.NEWS || []).filter(n => n.c !== 'unrest');
+  (u.conflicts || []).forEach(n => {
+    if (n.id === 'unrest') return;
+    const c = C.find(x => x.id === n.id);
+    if (!c) { if (n.name && n.center) C.push({ parties: [], countries: [], updates: [], intensity: 2, type: 'Krise', region: '', ...n }); return; }
+    const { updates, ...rest } = n; Object.assign(c, rest);
+    if (updates?.length) {
+      const seen = new Set((c.updates || []).map(x => x.date + x.text));
+      c.updates = [...updates.filter(x => !seen.has(x.date + x.text)), ...(c.updates || [])]
+        .filter(x => daysAgo(x.date) <= maxNewsDays)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    }
+  });
+  const seenEv = new Set(E.map(e => e.title + e.d));
+  (u.events || []).forEach(e => {
+    if (e.c !== 'unrest' && Array.isArray(e.coords) && daysAgo(e.d) <= maxDays && !seenEv.has(e.title + e.d)) {
+      E.push(e);
+      seenEv.add(e.title + e.d);
+    }
+  });
+  E.sort((a, b) => (b.d || '').localeCompare(a.d || ''));
+  if (u.news?.length) news = u.news.filter(n => n.c !== 'unrest');
+  Object.entries(u.countries || {}).forEach(([iso, o]) => {
+    const b = CO[iso] || {};
+    const bn = b.now || [];
+    CO[iso] = { ...b, ...o, now: o.now ? [...o.now, ...bn.filter(x => !o.now.includes(x))].slice(0, 8) : bn };
+  });
+  Object.entries(u.swiss || {}).forEach(([k, v]) => { if (v != null) SW[k] = v; });
+  const imp = { ...(window.CH_IMPACT || {}), ...(u.chImpact || {}) };
+  delete imp.unrest;
+  D = { C, E, CO, SW, news, imp, G: window.GEO, Z: window.ZL, names: window.GEO.names };
+}
+const nameOf = (a3) => (D.names[a3] || [a3])[0];
+const a2Of = (a3) => (D.names[a3] || [])[1] || '';
+
+// ---------- Geometrie-Helfer ----------
+const polys = (g) => g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+function inRing([x, y], r) { let h = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [xi, yi] = r[i], [xj, yj] = r[j]; if (((yi > y) !== (yj > y)) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) h = !h; } return h; }
+function countryAt(pt) { const f = D.G.features.find(f => polys(f.geometry).some(p => inRing(pt, p[0]))); return f ? f.properties.a3 : null; }
+function nearestOf(pt, list) { let best = null, bd = Infinity; list.forEach(a3 => { const f = D.G.features.find(x => x.properties.a3 === a3); if (!f) return; polys(f.geometry).forEach(p => p[0].forEach(([x, y]) => { const d = (x - pt[0]) ** 2 + (y - pt[1]) ** 2; if (d < bd) { bd = d; best = a3; } })); }); return best; }
+
+// ---------- Karte ----------
+let map, L_dark, L_darkRef, L_sat, L_satRef, L_countries, L_zones, L_ua, L_events, L_hubs;
+const ESRI = (s) => `https://server.arcgisonline.com/ArcGIS/rest/services/${s}/MapServer/tile/{z}/{y}/{x}`;
+function initMap() {
+  map = L.map('map', { zoomControl: false, worldCopyJump: true, minZoom: 2, maxZoom: 17, preferCanvas: true }).setView([28, 25], innerWidth < 820 ? 2 : 3);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  map.createPane('labels').style.zIndex = 450; map.getPane('labels').style.pointerEvents = 'none';
+  map.createPane('events').style.zIndex = 620;
+  const attr = 'Tiles © Esri · Natural Earth · DeepStateMap';
+  L_dark = L.tileLayer(ESRI('Canvas/World_Dark_Gray_Base'), { maxNativeZoom: 16, attribution: attr });
+  L_darkRef = L.tileLayer(ESRI('Canvas/World_Dark_Gray_Reference'), { maxNativeZoom: 16, pane: 'labels' });
+  L_sat = L.tileLayer(ESRI('World_Imagery'), { maxNativeZoom: 18, attribution: attr });
+  L_satRef = L.tileLayer(ESRI('Reference/World_Boundaries_and_Places'), { maxNativeZoom: 18, pane: 'labels' });
+
+  L_countries = L.geoJSON(D.G, {
+    style: f => f.properties.a3 === 'CHE' ? { color: '#ff3b47', weight: 2.2, fillColor: '#ff2d3a', fillOpacity: .12 } : { color: '#8fa3b8', weight: .6, opacity: .45, fillColor: '#1a1f2b', fillOpacity: .12 },
+    onEachFeature: (f, l) => l.on('click', () => openCountry(f.properties.a3)),
+  }).addTo(map);
+  L_zones = L.geoJSON(D.Z.zones, {
+    style: f => ({ color: ZONE[f.properties.status][1], weight: 1, fillColor: ZONE[f.properties.status][1], fillOpacity: .3 }),
+    onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stop(e); openConflict(f.properties.cid, false); }),
+  }).addTo(map);
+  L_ua = L.geoJSON(D.Z.ukraine, { style: f => ({ color: ZONE[f.properties.status][1], weight: 1, fillColor: ZONE[f.properties.status][1], fillOpacity: .42 }),
+    onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stop(e); openConflict('ukr', false); }) }).addTo(map);
+  L_hubs = L.layerGroup().addTo(map); L_events = L.layerGroup().addTo(map);
+  const renderer = L.canvas({ pane: 'events' });
+  const now = S.stamp;
+  D.E.forEach((e, i) => {
+    const [label, col] = EV[e.t] || EV.luft, recent = e.d && e.d.length === 10 && (now - new Date(e.d)) / 864e5 <= 7;
+    L.circleMarker([e.coords[1], e.coords[0]], { renderer, radius: e.t === 'flughafen' ? 7 : 5.5, color: e.t === 'flughafen' ? '#fff' : '#0a0a0a', weight: e.t === 'flughafen' ? 2 : 1,
+      fillColor: col, fillOpacity: recent ? 1 : .7 }).on('click', (ev) => { L.DomEvent.stop(ev); openEvent(i); }).addTo(L_events);
+  });
+  D.C.forEach(c => L.circleMarker([c.center[1], c.center[0]], { renderer, radius: 8 + c.intensity, color: INT_COL[c.intensity], weight: 2, fill: false })
+    .on('click', (ev) => { L.DomEvent.stop(ev); openConflict(c.id, false); }).addTo(L_hubs));
+  map.on('zoomend', () => { applyBase(); map.getZoom() > 5 ? map.removeLayer(L_hubs) : L_hubs.addTo(map); });
+  applyBase();
+  $('#legend').innerHTML = ['besetzt', 'kampf', 'kontrolle', 'spannung', 'epidemie'].map(k => `<div><span class="dot" style="background:${ZONE[k][1]};border-radius:2px"></span>${ZONE[k][0]}</div>`).join('') +
+    ['flughafen', 'luft', 'drohne', 'schiff', 'unruhen'].map(k => `<div><span class="dot" style="background:${EV[k][1]}${k === 'flughafen' ? ';box-shadow:0 0 0 2px #fff' : ''}"></span>${EV[k][0]}</div>`).join('');
+  loadUkraineLive();
+}
+function applyBase() {
+  const sat = S.bm === 'sat' || (S.bm === 'auto' && map.getZoom() >= 6);
+  [[L_dark, !sat], [L_darkRef, !sat], [L_sat, sat], [L_satRef, sat]].forEach(([l, on]) => on ? (map.hasLayer(l) || l.addTo(map)) : map.removeLayer(l));
+  L_countries.setStyle(f => f.properties.a3 === 'CHE' ? { color: '#ff3b47', weight: 2.2, fillColor: '#ff2d3a', fillOpacity: sat ? .05 : .12 } : { color: sat ? '#ffffff' : '#8fa3b8', weight: .6, opacity: .45, fillColor: '#1a1f2b', fillOpacity: sat ? 0 : .12 });
+}
+async function loadUkraineLive() {
+  const keep = { 'status.occupied': 'besetzt', 'status.unknown': 'grauzone', 'territories.crimea': 'besetzt', 'territories.ordlo': 'besetzt', 'territories.transnistria': 'separatisten', 'territories.abkhazia': 'separatisten', 'territories.tskhinvali-district': 'separatisten' };
+  try {
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 10000);
+    const d = await (await fetch('https://deepstatemap.live/api/history/last', { signal: ctl.signal })).json();
+    const feats = d.map.features.filter(f => f.geometry.type === 'Polygon').map(f => { const k = Object.keys(keep).find(k => (f.properties.name || '').includes('geoJSON.' + k));
+      return k ? { type: 'Feature', properties: { status: keep[k] }, geometry: { type: 'Polygon', coordinates: [f.geometry.coordinates[0].map(c => [c[0], c[1]])] } } : null; }).filter(Boolean);
+    if (feats.length) { L_ua.clearLayers(); L_ua.addData({ type: 'FeatureCollection', features: feats }); S.uaLive = (d.datetime || '').replace(' o ', ', '); }
+  } catch { /* eingebetteter Snapshot bleibt */ }
+}
+
+// ---------- Panel / Navigation ----------
+function setTab(v) {
+  S.view = v; S.stack = [];
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  if (v === 'map') return closePanel();
+  ({ conf: viewConflicts, news: viewNews, strat: viewStrategy, ch: viewSwiss, find: viewFind })[v]();
+}
+function openPanel(title, html, back) {
+  $('#phead').innerHTML = `${back ? '<button class="iconbtn" id="pback" style="width:32px;height:32px">‹</button>' : ''}<h2>${title}</h2><button class="iconbtn" id="pclose" style="width:32px;height:32px">✕</button>`;
+  $('#pbody').innerHTML = html; $('#pbody').scrollTop = 0; $('#panel').classList.add('open');
+  $('#pclose').onclick = () => { innerWidth >= 820 ? setTab('conf') : setTab('map'); };
+  if (back) $('#pback').onclick = () => { S.stack.pop(); const prev = S.stack.pop(); prev ? push(prev) : setTab(S.view === 'map' ? 'conf' : S.view); };
+  bindLinks();
+}
+function closePanel() { if (innerWidth < 820) $('#panel').classList.remove('open'); else viewConflicts(); }
+function push(fn) { S.stack.push(fn); fn(); }
+function bindLinks() {
+  $('#pbody').querySelectorAll('[data-c]').forEach(el => el.onclick = () => openConflict(el.dataset.c));
+  $('#pbody').querySelectorAll('[data-co]').forEach(el => el.onclick = () => openCountry(el.dataset.co));
+  $('#pbody').querySelectorAll('[data-ev]').forEach(el => el.onclick = () => openEvent(+el.dataset.ev));
+}
+const evRow = (i) => { const e = D.E[i], [lab, col] = EV[e.t] || EV.luft; return `<div class="row" data-ev="${i}"><span class="dot" style="background:${col}${e.t === 'flughafen' ? ';box-shadow:0 0 0 2px #fff' : ''}"></span><div><div class="t">${esc(e.title)}</div><div class="s">${lab} · ${fmtDate(e.d)}${e.cas ? ` · <span style="color:#ffb3b8">${esc(e.cas)}</span>` : ''}</div></div></div>`; };
+
+
+function viewNews() {
+  const all = [];
+  const seen = new Set();
+  
+  // Ticker items
+  (D.news || []).forEach((n, i) => {
+    if (n.c === 'unrest') return;
+    const k = (n.tag || '') + '::' + (n.text || '');
+    if (!seen.has(k)) {
+      seen.add(k);
+      const conf = D.C.find(c => c.id === n.c);
+      all.push({ type: 'ticker', tag: n.tag || 'TICKER', title: n.tag || 'Live-Meldung', text: n.text, date: '', cid: n.c, cname: conf ? conf.name : null, isLive: true });
+    }
+  });
+
+  // Events & Treffer
+  (D.E || []).forEach((e, i) => {
+    if (e.c === 'unrest' || daysAgo(e.d) > 14) return;
+    const k = (e.d || '') + '::' + (e.title || '') + '::' + (e.txt || '');
+    if (!seen.has(k)) {
+      seen.add(k);
+      const conf = D.C.find(c => c.id === e.c);
+      all.push({ type: 'event', eventIndex: i, tag: (EV[e.t] || EV.luft)[0], tagColor: (EV[e.t] || EV.luft)[1], title: e.title || (EV[e.t] || EV.luft)[0], text: e.txt || e.title, date: e.d || '', cid: e.c, cname: conf ? conf.name : null, coords: e.coords, cas: e.cas, src: e.src });
+    }
+  });
+
+  // Conflict updates
+  (D.C || []).forEach(c => {
+    if (c.id === 'unrest') return;
+    (c.updates || []).forEach((u, i) => {
+      if (u.date && daysAgo(u.date) > 14) return;
+      const k = (u.date || '') + '::' + (u.text || '');
+      if (!seen.has(k)) {
+        seen.add(k);
+        all.push({ type: 'conf_up', tag: u.tag || 'Lagebericht', tagColor: INT_COL[c.intensity], title: c.name, text: u.text, date: u.date || '', cid: c.id, cname: c.name, src: u.src });
+      }
+    });
+  });
+
+  // Swiss news
+  ((D.SW && D.SW.news) || []).forEach((sn, i) => {
+    if (sn.date && daysAgo(sn.date) > 14) return;
+    const k = 'ch::' + (sn.tag || '') + '::' + (sn.text || '');
+    if (!seen.has(k)) {
+      seen.add(k);
+      all.push({ type: 'swiss', tag: sn.tag || 'SCHWEIZ', tagColor: 'var(--ch)', title: 'Schweiz · ' + (sn.tag || 'News'), text: sn.text, date: sn.date || '', src: sn.src });
+    }
+  });
+
+  all.sort((a, b) => {
+    if (!a.date && b.date) return -1;
+    if (a.date && !b.date) return 1;
+    return (b.date || '').localeCompare(a.date || '');
+  });
+
+  openPanel('Lagezentrum · Schlagzeilen', `
+    <div class="grid3" style="margin-top:2px">
+      <div class="kpi"><div class="l">Meldungen</div><div class="v">${all.length}</div></div>
+      <div class="kpi"><div class="l">Treffer/Events</div><div class="v" style="color:var(--amber)">${D.E.length}</div></div>
+      <div class="kpi"><div class="l">Konflikte</div><div class="v" style="color:var(--red)">${D.C.length}</div></div>
+    </div>
+    <div style="margin-top:8px">
+      <input id="newsSearchInput" placeholder="Schlagzeilen filtern (z. B. Drohne, Gaza, Kiew) …" autocomplete="off" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font-size:13px;outline:none">
+    </div>
+    <div class="card" style="padding:2px 10px;margin-top:8px" id="newsList"></div>`);
+
+  const renderList = (q) => {
+    q = (q || '').trim().toLowerCase();
+    const filtered = all.filter(item => {
+      if (!q) return true;
+      return (item.title || '').toLowerCase().includes(q) ||
+             (item.text || '').toLowerCase().includes(q) ||
+             (item.tag || '').toLowerCase().includes(q) ||
+             (item.cname || '').toLowerCase().includes(q) ||
+             (item.date || '').includes(q);
+    });
+
+    $('#newsList').innerHTML = filtered.map(it => {
+      const tc = it.tagColor || 'var(--cyan)';
+      return `
+        <div class="row" style="padding:10px 2px;cursor:default">
+          <span class="dot" style="background:${tc};margin-top:4px;flex:none"></span>
+          <div style="min-width:0;flex:1">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+              <span class="chip" style="font-size:9.5px;padding:1px 5px;color:${tc};border-color:${tc}44">${esc(it.tag)}</span>
+              <span class="mono muted" style="font-size:10px">${it.isLive ? '<b style="color:var(--cyan)">LIVE</b>' : fmtDate(it.date)}</span>
+            </div>
+            <div class="t" style="margin-top:4px;font-size:13px">${esc(it.title)}</div>
+            <div class="s" style="color:#d5d9e3;font-size:12px;margin-top:3px;line-height:1.4">${esc(it.text)}</div>
+            ${it.cas ? `<div style="margin-top:4px"><span class="chip" style="color:#ffd6d9;border-color:rgba(255,77,109,.4);font-size:9.5px">⚠️ ${esc(it.cas)}</span></div>` : ''}
+            <div style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:11px">
+              ${it.coords ? `<button class="chip btn" data-fly-coords="${it.coords[0]},${it.coords[1]}">📍 Auf Karte</button>` : ''}
+              ${it.cid ? `<button class="chip btn" data-c="${it.cid}">🔥 Konflikt</button>` : ''}
+              ${it.src ? `<a class="chip btn" style="color:var(--cyan);margin-left:auto" href="${esc(it.src)}" target="_blank" rel="noopener">Quelle ↗</a>` : ''}
+            </div>
+          </div>
+        </div>`;
+    }).join('') || '<div class="muted" style="padding:16px;text-align:center">Keine Treffer gefunden.</div>';
+
+    $('#newsList').querySelectorAll('[data-fly-coords]').forEach(b => {
+      b.onclick = () => {
+        const [lng, lat] = b.dataset.flyCoords.split(',').map(Number);
+        map.flyTo([lat, lng], 6, { duration: 1.2 });
+        if (innerWidth < 820) $('#panel').classList.remove('open');
+      };
+    });
+    bindLinks();
+  };
+
+  renderList('');
+  $('#newsSearchInput').oninput = (e) => renderList(e.target.value);
+}
+
+function viewStrategy() {
+  const gens = [
+    {
+      num: '1GW',
+      name: '1. Generation: Massenheere & Linientaktik',
+      short: 'Manpower & Kolonne',
+      era: 'ca. 1648 – 1860er',
+      color: '#5b9cff',
+      summary: 'Geordnete Massenheere, Linienformationen und Salvenfeuer glattrohriger Musketen. Entstand nach dem Westfälischen Frieden (Staatsmonopol auf Gewalt).',
+      weapons: 'Vorderlader-Musketen mit Bajonett, Glattrohrkanonen. Geringe Reichweite unter 100 m.',
+      doctrine: 'Lineare Gefechtsordnung (zwei bis drei Glieder) für maximale Salvenfeuerkraft; Kolonnen zum Durchbruch. Disziplin, Marschordnung und Trommelsignale.',
+      figures: 'Napoleon Bonaparte (Levée en masse, Austerlitz, Jena), Friedrich der Grosse, Carl von Clausewitz.',
+      turning: 'Gezogene Läufe mit Minié-Geschossen im US-Bürgerkrieg machten Linienstürme zu Selbstmordkommandos.'
+    },
+    {
+      num: '2GW',
+      name: '2. Generation: Industrielle Feuerkraft & Gräben',
+      short: 'Waffen & Abnutzung',
+      era: 'ca. 1860er – 1918',
+      color: '#ffb547',
+      summary: 'Feuerkraft ersetzt Manpower: «Die Artillerie erobert, die Infanterie besetzt» (Pétain). Industrielle Massenvernichtung und Abnutzung.',
+      weapons: 'Hinterladergewehre, Maschinengewehre (Maxim), gezogene Schnellfeuerartillerie (Canon 75), Eisenbahnen, Stacheldraht, Giftgas.',
+      doctrine: 'Methodisches Gefecht (Bataille conduite), vorbereitende Trommelfeuer, minutengenaue Feuerwalzen, streng hierarchische Top-Down-Befehlsführung, Attrition Warfare.',
+      figures: '1. Weltkrieg (Verdun 1916, Somme, Passchendaele). General Philippe Pétain, Douglas Haig, Erich von Falkenhayn.',
+      turning: 'Grabenstarre forderte Millionen Opfer; deutsche Infiltrationstaktik (Stosstrupps 1918) und erste Panzereinsätze erzwangen den Bewegungskrieg.'
+    },
+    {
+      num: '3GW',
+      name: '3. Generation: Manöver & Verbundene Waffen',
+      short: 'Geschwindigkeit & Lähmung',
+      era: 'ca. 1918 – 1980er',
+      color: '#3ee6a8',
+      summary: 'Abkehr von linearer Feuerkraft. Den Feind durch Geschwindigkeit, Schwerpunktbildung und Umgehung mental und operativ lähmen statt zermürben.',
+      weapons: 'Mechanisierte Panzerdivisionen, motorisierte Infanterie, Luftnahunterstützung (CAS/Stuka), taktischer Sprechfunk in Echtzeit, Radar.',
+      doctrine: 'Verbundene Waffen (Combined Arms), Auftragstaktik (Initiative der Unterführer vor Ort), OODA-Loop von John Boyd (Observe-Orient-Decide-Act schneller als der Gegner).',
+      figures: 'Heinz Guderian, Erwin Rommel, George S. Patton, Erich von Manstein, John Boyd. Blitzkrieg 1940, Operation Bagration 1944, Sechstagekrieg 1967.',
+      turning: 'Gegen irreguläre Aufständische, die im Volk untertauchen, liefen gepanzerte Verbände ins Leere (Vietnam, Afghanistan).'
+    },
+    {
+      num: '4GW',
+      name: '4. Generation: Asymmetrie & Aufstand',
+      short: 'Insurgency & Zermürbung',
+      era: 'ca. 1960er – 2010er',
+      color: '#f472b6',
+      summary: 'Verlust des Staatenmonopols auf Gewalt. Staatenlose Milizen und Guerillas zermürben den politischen Willen der gegnerischen Gesellschaft.',
+      weapons: 'IEDs (Sprengfallen), RPGs, Kalaschnikows, zivile Kommunikationsmittel, Internet- und Videopropaganda, Verstecke im urbanen Raum und Tunnelsystemen.',
+      doctrine: 'Asymmetrie: Keine Uniformen, vollständiges Verschmelzen mit Zivilisten. Ziel ist nicht der Sieg im Felde, sondern das Zermürben der gegnerischen Heimatfront durch endlose Dauer.',
+      figures: 'William S. Lind (Begründer der 4GW-Theorie 1989), Mao Zedong (Theorie des Volkskriegs), Vo Nguyen Giap (Vietnam), David Kilcullen, General David Petraeus (COIN).',
+      turning: 'Aufstände fordern Demokratien heraus; mit dem Internet und der Digitalisierung entstand ein noch umfassenderes kognitives und digitales Gefechtsfeld.'
+    },
+    {
+      num: '5GW',
+      name: '5. Generation: Informationskrieg & Kognitive Kriegsführung',
+      short: 'Information, Cyber & Hybride Dominanz',
+      era: 'Gegenwart & Zukunft (ab 2010er)',
+      color: '#ff4d6d',
+      summary: '«Krieg führen, ohne dass der Gegner merkt, dass er angegriffen wird». Der menschliche Verstand, Datenströme, KI und globale Netze sind das Schlachtfeld.',
+      weapons: 'KI-gestützte Desinformation, Deepfakes, Cyberangriffe (Stuxnet), FPV-Drohnenschwärme, Loitering Munition, Satellitenstörung, Sabotage kritischer Infrastrukturen (Unterseekabel).',
+      doctrine: 'Kognitive Kriegsführung (Cognitive Warfare), Threshold Warfare (Grauzonenkrieg exakt unterhalb von Art. 5 NATO), gläsernes Gefechtsfeld (Sensoren), Multi-Domain Operations (MDO: Land, Luft, See, Cyber, Weltraum).',
+      figures: 'Ukraine-Krieg (multiphasischer Hybridkrieg: Gräben wie 1GW/2GW kombiniert mit Starlink, FPV-Drohnen und Cyber), Gerasimov-Doktrin (4:1 nicht-militärisch zu militärisch), Chinas «Drei Kriegsführungen».',
+      turning: 'Autonome KI-Waffensysteme und die Verwundbarkeit digital vernetzter Gesellschaften definieren die Geopolitik neu.'
+    }
+  ];
+
+  openPanel('Militärgeschichte & Doktrin', `
+    <div class="card" style="background:rgba(94,231,255,.06);border-color:rgba(94,231,255,.3);margin-top:2px">
+      <h4 style="color:var(--cyan)">Die 5 Generationen der Kriegsführung (5GW)</h4>
+      <p style="font-size:12.5px;color:#cfd3de">
+        Vom Konzept von William S. Lind (1989) bis zur modernen Multi-Domain-Kriegsführung: Die Evolution von der <b>Massenarmee</b> (1GW) über <b>Feuerkraft</b> (2GW), <b>Manöver</b> (3GW) und <b>Asymmetrie</b> (4GW) hin zur <b>kognitiven und digitalen Dominanz</b> (5GW).
+      </p>
+    </div>
+
+    ${gens.map(g => `
+      <div class="card" style="margin-top:9px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span class="chip mono" style="font-weight:700;color:${g.color};border-color:${g.color}55;background:${g.color}15">${g.num}</span>
+          <span class="mono muted" style="font-size:10px">${g.era}</span>
+        </div>
+        <div style="font-size:13.5px;font-weight:700;margin-top:6px;color:#fff">${esc(g.name)}</div>
+        <div style="font-size:11.5px;font-weight:600;color:${g.color};margin-top:2px">${esc(g.short)}</div>
+        <p style="font-size:12.5px;margin-top:6px;line-height:1.45">${esc(g.summary)}</p>
+        
+        <div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--line);font-size:11.5px;line-height:1.4">
+          <div><b class="muted">Taktik:</b> <span style="color:#cfd3de">${esc(g.doctrine)}</span></div>
+          <div style="margin-top:3px"><b class="muted">Waffen:</b> <span style="color:#cfd3de">${esc(g.weapons)}</span></div>
+          <div style="margin-top:3px"><b class="muted">Schlüsselfiguren:</b> <span style="color:#cfd3de">${esc(g.figures)}</span></div>
+          <div style="margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(255,181,71,.08);border:1px solid rgba(255,181,71,.25);color:#ffe4aa;font-size:11px">
+            <b>Wendepunkt:</b> ${esc(g.turning)}
+          </div>
+        </div>
+      </div>`).join('')}
+
+    <div class="card" style="margin-top:10px">
+      <h4 style="color:var(--amber)">Klassische Strategische Denker</h4>
+      <div style="font-size:12.2px;line-height:1.45" class="tl">
+        <div style="--c:#ffb547"><b>Sunzi (ca. 500 v. Chr.):</b> <i>«Die grösste Leistung besteht darin, den Feind ohne Kampf zu besiegen.»</i> Täuschung, Vorbereitung, Anpassung wie Wasser.</div>
+        <div style="--c:#5b9cff"><b>Carl von Clausewitz (1780–1831):</b> <i>«Der Krieg ist die Fortsetzung der Politik mit anderen Mitteln.»</i> Schwerpunkt (Center of Gravity), Nebel des Krieges und Friktion.</div>
+        <div style="--c:#3ee6a8"><b>John Boyd (1927–1997):</b> <i>OODA-Loop (Observe-Orient-Decide-Act).</i> Den Entscheidungszyklus schneller durchlaufen als der Gegner, um ihn in Lähmung zu stürzen.</div>
+      </div>
+    </div>
+
+    <div class="card ch" style="margin-top:10px">
+      <h4>Schweizer Gesamtverteidigung im 5GW-Zeitalter</h4>
+      <p style="font-size:12.2px;line-height:1.45">
+        Vom Alpen-Réduit der Vergangenheit über die mechanisierte Raumverteidigung im Kalten Krieg zur modernen vernetzten Abwehr: Kommando Cyber, F-35A / Bodluv Patriot, Schutz kritischer Infrastrukturen, zivile Resilienz und bewaffnete Neutralität.
+      </p>
+    </div>`);
+}
+
+function viewConflicts() {
+  const list = [...D.C].sort((a, b) => b.intensity - a.intensity || a.name.localeCompare(b.name));
+  openPanel('Konflikt-Tracker', `
+    <div class="grid3" style="margin-top:2px">
+      <div class="kpi"><div class="l">Konflikte</div><div class="v">${D.C.length}</div></div>
+      <div class="kpi"><div class="l">Hoch / Krieg</div><div class="v" style="color:var(--red)">${D.C.filter(c => c.intensity >= 4).length}</div></div>
+      <div class="kpi"><div class="l">Getroffene Orte</div><div class="v" style="color:var(--amber)">${D.E.length}</div></div>
+    </div>
+    <div class="card" style="padding:2px 10px">${list.map(c => { const u = (c.updates || [])[0]; return `<div class="row" data-c="${c.id}"><span class="dot" style="background:${INT_COL[c.intensity]};box-shadow:0 0 8px ${INT_COL[c.intensity]}"></span>
+      <div style="min-width:0"><div class="t">${esc(c.name)}</div><div class="s">${INT_TXT[c.intensity]} · ${esc(c.region)}</div>${u ? `<div class="s" style="color:#cfd3de">${fmtDate(u.date)}: ${esc(u.text.length > 90 ? u.text.slice(0, 90) + '…' : u.text)}</div>` : ''}</div></div>`; }).join('')}</div>`);
+}
+
+function viewSwiss() {
+  const SW = D.SW, pc = { SVP: '#3ee6a8', SP: '#ff4d6d', FDP: '#5b9cff', Mitte: '#ffb547' }, vs = { 'Kommend': '#ffb547', 'Abgelehnt': '#ff6b8b', 'Angenommen': '#3ee6a8', 'GV angenommen': '#3ee6a8' };
+  openPanel(CHX + ' Schweiz', `
+    <div class="grid3" style="margin-top:2px">${(SW.indicators || []).map(k => `<div class="kpi"><div class="l">${esc(k.label)}</div><div class="v" style="color:${k.color}">${esc(k.value)}<span class="muted" style="font-size:10px;font-weight:400"> ${esc(k.unit)}</span></div><div class="n">${esc(k.note)}</div></div>`).join('')}</div>
+    <div class="card ch"><h4>Lage-Radar: Folgen für die Schweiz</h4>${(SW.radar || []).map(r => `<div style="padding:6px 0;border-bottom:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:13px">${esc(r.area)}</b>${meter(r.level, RISK_COL[r.level])}</div><div style="font-size:12.5px;color:#cfd3de;margin-top:2px">${esc(r.text)}</div></div>`).join('')}</div>
+    <div class="card"><h4>Aktuelle Schweizer Meldungen</h4>${(SW.news || []).map(n => `<div style="padding:5px 0;font-size:12.8px;border-bottom:1px solid var(--line)"><span class="chip" style="color:#ffb3b8;margin-right:6px">${esc(n.tag)}</span>${n.src ? `<a href="${esc(n.src)}" target="_blank" rel="noopener" style="color:inherit">${esc(n.text)}</a>` : esc(n.text)}</div>`).join('')}</div>
+    <div class="card"><h4>Bundesrat 2026</h4>${(SW.gov || []).map(g => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px"><span class="dot" style="background:${pc[g.party]}"></span><span style="flex:1">${esc(g.name)}${g.pres ? ' <b style="color:var(--ch);font-size:10px">BP</b>' : ''}</span><span class="muted mono" style="font-size:10.5px">${g.party} · ${g.dept}</span></div>`).join('')}
+      ${SW.succession ? `<div class="muted" style="font-size:11.5px;margin-top:6px">Nachfolge Parmelin:</div><div class="chips" style="margin-top:4px">${SW.succession.map(n => `<span class="chip">${esc(n)}</span>`).join('')}</div>` : ''}</div>
+    <div class="card"><h4>Abstimmungen 2026</h4>${(SW.votes || []).map(v => `<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span class="mono muted" style="font-size:10.5px;width:66px;flex:none">${esc(v.date)}</span><span style="flex:1">${esc(v.title)}</span><span class="chip" style="color:${vs[v.status] || '#aaa'}">${esc(v.status)}</span></div>`).join('')}</div>
+    <div class="card"><h4>Verträge: EU-Paket & Freihandel</h4>${(SW.bilateral || []).map(t => `<div style="padding:4px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span class="mono muted" style="font-size:10.5px">${esc(t.year)}</span> ${esc(t.name)} <span class="chip">${esc(t.status)}</span>${t.detail ? `<div class="muted" style="font-size:11.5px">${esc(t.detail)}</div>` : ''}</div>`).join('')}</div>
+    <div class="card"><h4>Neutralität & Schutzmachtmandate</h4><div class="tl">${(SW.neutrality || []).map(n => `<div style="--c:var(--ch)"><span class="mono" style="color:var(--ch);margin-right:6px">${esc(n.year)}</span>${esc(n.text)}</div>`).join('')}</div>
+      <div class="chips" style="margin-top:8px">${(SW.mandates || []).map(m => `<span class="chip">${esc(m)}</span>`).join('')}</div></div>
+    <div class="chips" style="margin-top:10px">${[['Schweiz auf Karte', 'CHE']].map(([l]) => `<button class="chip btn" id="flyCH">📍 ${l}</button>`).join('')}<button class="chip btn" data-co="CHE">Dossier Schweiz</button></div>`);
+  $('#flyCH').onclick = () => { map.flyToBounds([[45.8, 5.9], [47.85, 10.5]], { duration: 1.2 }); if (innerWidth < 820) $('#panel').classList.remove('open'); };
+}
+
+function viewFind() {
+  const all = Object.keys(D.CO).filter(k => D.names[k]).map(k => [k, nameOf(k)]).sort((a, b) => a[1].localeCompare(b[1], 'de'));
+  openPanel('Länder & Suche', `<input id="search" placeholder="Land oder Konflikt suchen …" autocomplete="off"><div class="card" style="padding:2px 10px" id="flist"></div>`);
+  const render = (q) => {
+    q = (q || '').toLowerCase();
+    const cs = D.C.filter(c => q && c.name.toLowerCase().includes(q)).map(c => `<div class="row" data-c="${c.id}"><span class="dot" style="background:${INT_COL[c.intensity]}"></span><div><div class="t">${esc(c.name)}</div><div class="s">Konflikt</div></div></div>`);
+    const ls = all.filter(([, n]) => !q || n.toLowerCase().includes(q)).map(([k, n]) => { const d = D.CO[k]; return `<div class="row" data-co="${k}">${flag(a2Of(k), 16) || '<span class="dot"></span>'}<div style="flex:1"><div class="t">${esc(n)}</div></div>
+      <div class="s" style="text-align:right">Lage ${meter(d.r || 1, RISK_COL[d.r || 1])}<br>CH ${meter(d.x || 1, '#ff2d3a')}</div></div>`; });
+    $('#flist').innerHTML = [...cs, ...ls].join('') || '<div class="muted" style="padding:10px">Keine Treffer</div>';
+    bindLinks();
+  };
+  $('#search').oninput = (e) => render(e.target.value); render('');
+}
+
+function openCountry(a3) {
+  push(() => {
+    const d = D.CO[a3] || {}, n = nameOf(a3), r = d.r || 1, x = d.x || 1;
+    const conf = D.C.filter(c => c.countries.includes(a3));
+    const evs = D.E.map((e, i) => [e, i]).filter(([e]) => (e._a3 ||= (countryAt(e.coords) || nearestOf(e.coords, (D.C.find(c => c.id === e.c) || {}).countries || []))) === a3)
+      .sort((a, b) => (b[0].d || '').localeCompare(a[0].d || '')).map(([, i]) => i);
+    const tabs = { Lage: `
+        <div class="card"><h4>Aktuell wichtig</h4>${(d.now || []).length ? `<div class="tl">${d.now.map(t => `<div style="--c:${RISK_COL[r]}">${esc(t)}</div>`).join('')}</div>` : `<p>${esc(val(d.dom) || 'Keine besonderen Entwicklungen.')}</p>`}</div>
+        ${conf.length ? `<div class="card" style="padding-bottom:4px"><h4>Konflikte & Krisen</h4>${conf.map(c => `<div class="row" data-c="${c.id}"><span class="dot" style="background:${INT_COL[c.intensity]}"></span><div><div class="t">${esc(c.name)}</div><div class="s">${esc(c.status)}</div></div></div>`).join('')}</div>` : ''}
+        ${evs.length ? `<div class="card" style="padding-bottom:4px"><h4>Getroffene Orte (${evs.length})</h4>${evs.map(evRow).join('')}</div>` : ''}`,
+      Schweiz: `<div class="card ch"><h4>Bedeutung für die Schweiz</h4><div style="margin-bottom:6px;font-size:11.5px" class="muted">Relevanz ${meter(x, '#ff2d3a')} · Lage ${meter(r, RISK_COL[r])} <span style="color:${RISK_COL[r]}">${RISK_TXT[r]}</span></div>
+          <p>${esc(val(d.ch) || 'Geringe direkte Bezüge; Kontakte über regionale Botschaften und das Internationale Genf.')}</p>${(d.tags || []).length ? `<div class="chips" style="margin-top:8px">${d.tags.map(t => `<span class="chip" style="color:#ffd6d9;border-color:rgba(255,45,58,.35)">${esc(t)}</span>`).join('')}</div>` : ''}</div>
+        ${conf.filter(c => D.imp[c.id]).map(c => `<div class="card"><h4>${esc(c.name)}</h4><p>${esc(D.imp[c.id])}</p></div>`).join('')}
+        <div class="card"><h4>Reisen</h4><p>Massgebend sind die <a href="https://www.eda.admin.ch/eda/de/home/vertretungen-und-reisehinweise.html" target="_blank" rel="noopener">EDA-Reisehinweise</a>.</p></div>`,
+      Politik: `<div class="card"><h4>System</h4><p>${esc(val(d.sys) || '—')}</p></div><div class="card"><h4>Führung</h4><p>${esc(val(d.head) || '—')}<br>${esc(val(d.gov) || '')}</p></div>
+        <div class="card"><h4>Innenpolitik</h4><p>${esc(val(d.dom) || '—')}</p></div><div class="card"><h4>Aussenpolitik</h4><p>${esc(val(d.for) || '—')}</p></div>`,
+      Geschichte: `<div class="card"><h4>Kontext</h4><p>${esc(val(d.hist) || '—')}</p></div>${(d.hc || []).length ? `<div class="card"><h4>Prägende Konflikte</h4><div class="tl">${d.hc.map(h => `<div style="--c:var(--amber)">${esc(h)}</div>`).join('')}</div></div>` : ''}`,
+      Geografie: `<div class="card"><h4>Topografie</h4><p>${esc(val(d.geo) || '—')}</p></div><div class="card"><h4>Strategische Lage</h4><p>${esc(val(d.str) || '—')}</p></div>`,
+    };
+    openPanel(`${flag(a2Of(a3), 16)} ${esc(n)}`, `
+      <div class="chips"><span class="chip" style="color:${RISK_COL[r]}">● ${RISK_TXT[r]}</span><span class="chip" style="color:#ffd6d9">CH-Relevanz ${x}/5</span>${BLOC[a3] ? `<span class="chip">${BLOC[a3]}</span>` : ''}</div>
+      <div class="ptabs" id="ctabs">${Object.keys(tabs).map((k, i) => `<button class="${i ? '' : 'on'}" data-k="${k}">${k === 'Schweiz' ? CHX + ' ' : ''}${k}</button>`).join('')}</div><div id="cbody"></div>`, true);
+    const show = (k) => { $('#cbody').innerHTML = tabs[k]; document.querySelectorAll('#ctabs button').forEach(b => b.classList.toggle('on', b.dataset.k === k)); bindLinks(); };
+    document.querySelectorAll('#ctabs button').forEach(b => b.onclick = () => show(b.dataset.k)); show('Lage');
+    const f = D.G.features.find(f => f.properties.a3 === a3);
+    if (f) { const b = L.geoJSON(f).getBounds(); map.flyToBounds(b, { maxZoom: 6, duration: 1.1, paddingTopLeft: innerWidth >= 820 ? [20, 20] : [20, 20], paddingBottomRight: innerWidth >= 820 ? [20, 20] : [20, innerHeight * .45] }); }
+  });
+}
+
+function openConflict(id) {
+  push(() => {
+    const c = D.C.find(x => x.id === id); if (!c) return;
+    const evs = D.E.map((e, i) => [e, i]).filter(([e]) => e.c === id).sort((a, b) => (b[0].d || '').localeCompare(a[0].d || '')).map(([, i]) => i);
+    openPanel(esc(c.name), `
+      <div class="chips"><span class="chip" style="color:${INT_COL[c.intensity]}">● ${INT_TXT[c.intensity]}</span><span class="chip">${esc(c.type)}</span>${c.since ? `<span class="chip">seit ${fmtDate(c.since)}</span>` : ''}</div>
+      <div class="card"><h4>Lage</h4><p><b style="color:${INT_COL[c.intensity]}">${esc(c.status)}</b></p><p style="margin-top:6px">${esc(c.summary || '')}</p>${c.tote2026 ? `<p class="muted" style="margin-top:6px;font-size:12px">Tote: ${esc(c.tote2026)}</p>` : ''}${id === 'ukr' && S.uaLive ? `<p class="muted" style="font-size:11px;margin-top:6px">Front live (DeepStateMap), Stand ${esc(S.uaLive)}</p>` : ''}</div>
+      ${D.imp[id] ? `<div class="card ch"><h4>${CHX} Bedeutung für die Schweiz</h4><p>${esc(D.imp[id])}</p></div>` : ''}
+      <div class="card"><h4>Lageverlauf</h4><div class="tl">${(c.updates || []).slice(0, 14).map(u => `<div style="--c:${INT_COL[c.intensity]}"><div class="d">${fmtDate(u.date)} · ${esc(u.tag || '')}${srcA(u.src)}</div>${esc(u.text)}</div>`).join('')}</div></div>
+      ${evs.length ? `<div class="card" style="padding-bottom:4px"><h4>Getroffene Orte (${evs.length})</h4>${evs.map(evRow).join('')}</div>` : ''}
+      <div class="card"><h4>Beteiligte Staaten</h4><div class="chips">${c.countries.map(a3 => `<button class="chip btn" data-co="${a3}">${flag(a2Of(a3))} ${esc(nameOf(a3))}</button>`).join('')}</div></div>`, true);
+    const z = D.Z.zones.features.filter(f => f.properties.cid === id);
+    const b = id === 'ukr' ? L.latLngBounds([[44, 29], [52.5, 41]]) : z.length ? L.geoJSON({ type: 'FeatureCollection', features: z }).getBounds() : null;
+    const pad = { paddingTopLeft: [20, 20], paddingBottomRight: [20, innerWidth < 820 ? innerHeight * .45 : 20] };
+    b ? map.flyToBounds(b, { maxZoom: 7, duration: 1.1, ...pad }) : map.flyTo([c.center[1], c.center[0]], 5, { duration: 1.1 });
+  });
+}
+
+function openEvent(i) {
+  push(() => {
+    const e = D.E[i], [lab, col] = EV[e.t] || EV.luft, c = D.C.find(x => x.id === e.c);
+    openPanel(esc(e.title), `
+      <div class="chips"><span class="chip" style="color:${col}">● ${lab}</span><span class="chip">${fmtDate(e.d)}</span><span class="chip mono">${e.coords[1].toFixed(3)}°, ${e.coords[0].toFixed(3)}°</span></div>
+      ${e.cas ? `<div class="card" style="border-color:${col}66"><h4>Opfer / Schaden</h4><p style="font-weight:600;color:#ffd0d4">${esc(e.cas)}</p></div>` : ''}
+      <div class="card"><h4>Ereignis</h4><p>${esc(e.txt)}${srcA(e.src)}</p></div>
+      ${c ? `<div class="card" style="padding-bottom:4px"><h4>Konflikt</h4><div class="row" data-c="${c.id}"><span class="dot" style="background:${INT_COL[c.intensity]}"></span><div><div class="t">${esc(c.name)}</div><div class="s">${esc(c.status)}</div></div></div></div>` : ''}`, true);
+    map.flyTo([e.coords[1], e.coords[0]], e.t === 'flughafen' ? 13 : 10, { duration: 1.3 });
+  });
+}
+
+function renderTicker() {
+  const items = D.news.map(n => `<span ${n.c ? `data-c="${n.c}"` : ''} style="cursor:pointer"><span class="tag">${esc(n.tag)}</span>${esc(n.text)}</span>`).join('<span class="muted">◆</span>');
+  $('#track').innerHTML = items + '<span class="muted">◆</span>' + items;
+  $('#track').querySelectorAll('[data-c]').forEach(el => el.onclick = () => openConflict(el.dataset.c));
+}
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3500); }
+
+(async function start() {
+  if (!('DecompressionStream' in window)) { $('#loadmsg').textContent = 'Dieser Browser ist zu alt (benötigt Chrome/Edge/Firefox/Safari ab 2023).'; return; }
+  try {
+    await loadPayload(); mergeData();
+    $('#stand').textContent = 'Stand ' + S.stamp.toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
+    initMap(); renderTicker();
+    document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.v));
+    $('#bmBtn').onclick = () => { S.bm = { auto: 'sat', sat: 'dark', dark: 'auto' }[S.bm]; applyBase(); toast({ auto: 'Karte: Automatisch (dunkel → Satellit beim Zoomen)', sat: 'Karte: Satellit', dark: 'Karte: Dunkel' }[S.bm]); };
+    if (innerWidth >= 820) setTab('conf');
+    addEventListener('resize', () => { setTimeout(() => map.invalidateSize(), 50); });
+    $('#loading').classList.add('hide');
+  } catch (e) { console.error(e); $('#loadmsg').textContent = 'Fehler beim Laden: ' + e.message; }
+})();
+</script>
+</body>
+</html>
