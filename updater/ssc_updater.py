@@ -8,9 +8,11 @@ Ablauf pro Lauf:
   3. Lokale KI (Ollama) übersetzt neue Meldungen ins Deutsche (Schweizer Rechtschreibung),
      erzeugt Kurztitel, Opferangaben und einen Ortsnamen.
   4. data/update.js neu schreiben (gleiches Schema wie die App, kumulativ, Einträge mit "via": "lokal").
+  5. Export-Datei neu bauen und geänderte Updater-Dateien per git commit + git push auf GitHub hochladen.
 
-Start: python ssc_updater.py            (normaler Lauf)
+Start: python ssc_updater.py            (normaler Lauf inkl. GitHub-Push)
        python ssc_updater.py --no-ai    (ohne KI, nur Rohdaten auf Englisch)
+       python ssc_updater.py --no-push  (ohne git commit/push auf GitHub)
        python ssc_updater.py --rebuild  (nur update.js aus dem Zwischenspeicher neu aufbauen, ohne Abruf und ohne KI)
 """
 import hashlib
@@ -595,9 +597,73 @@ def build(data, items, state):
     data['swiss']['stand'] = f'{now:%d.%m.%Y}'
 
 
+# ------------------------------------------------------------ GitHub-Sync
+GIT_TRACKED_FILES = ['data/update.js', 'Swiss-Strategic-Center-Mobil.html', 'updater/state.json']
+
+
+def run_git(args, timeout=60):
+    env = {**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+    return subprocess.run(
+        ['git', *args],
+        cwd=str(ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+        timeout=timeout,
+        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+    )
+
+
+def git_sync():
+    if not (ROOT / '.git').exists():
+        log('  GitHub-Sync übersprungen (kein Git-Repository)')
+        return
+    branch = CFG.get('git_branch', 'main')
+    try:
+        files = [f for f in GIT_TRACKED_FILES if (ROOT / f).exists()]
+        if not files:
+            return
+        st = run_git(['status', '--porcelain', '--', *files])
+        if st.returncode != 0:
+            log(f'  GitHub-Sync: git status fehlgeschlagen ({st.stderr.strip()})')
+            return
+        if not st.stdout.strip():
+            log('  GitHub-Sync: keine Änderungen zum Hochladen')
+            return
+        add = run_git(['add', '--', *files])
+        if add.returncode != 0:
+            log(f'  GitHub-Sync: git add fehlgeschlagen ({add.stderr.strip()})')
+            return
+        if run_git(['diff', '--cached', '--quiet']).returncode == 0:
+            log('  GitHub-Sync: keine gestagten Änderungen')
+            return
+        stamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        cm = run_git(['commit', '-m', f'Lage-Update {stamp}'])
+        if cm.returncode != 0:
+            log(f'  GitHub-Sync: git commit fehlgeschlagen ({cm.stderr.strip() or cm.stdout.strip()})')
+            return
+        pull = run_git(['pull', '--rebase', '--autostash', 'origin', branch], timeout=90)
+        if pull.returncode != 0:
+            run_git(['rebase', '--abort'])
+            log(f'  GitHub-Sync: git pull --rebase fehlgeschlagen ({pull.stderr.strip() or pull.stdout.strip()})')
+            return
+        push = run_git(['push', 'origin', branch], timeout=90)
+        if push.returncode != 0:
+            log(f'  GitHub-Sync: git push fehlgeschlagen ({push.stderr.strip() or push.stdout.strip()})')
+            return
+        log(f'  GitHub-Sync: Stand auf origin/{branch} gepusht ({stamp})')
+    except FileNotFoundError:
+        log('  GitHub-Sync übersprungen (git ist nicht im PATH installiert)')
+    except Exception as e:
+        log(f'  GitHub-Sync fehlgeschlagen: {e!r}')
+
+
 # ------------------------------------------------------------ Hauptablauf
 def main():
     no_ai = '--no-ai' in sys.argv
+    no_push = '--no-push' in sys.argv
     if LOCK.exists():
         try:
             other = int(LOCK.read_text().strip())
@@ -673,6 +739,8 @@ def main():
             log(f'  Export aktualisiert: {build_export.OUT.name} ({build_export.build() // 1024} KB)')
         except Exception as e:
             log(f'  Export fehlgeschlagen: {e!r}')
+        if CFG.get('git_auto_push', True) and not no_push:
+            git_sync()
         n_ev = sum(1 for e in data['events'] if e.get('via') == 'lokal')
         log(f'=== Fertig: {len(fresh)} neue Meldungen, {n_ev} lokale Kartenpunkte, {len(data.get("news", []))} Ticker, '
             f'{len(data["swiss"].get("news", []))} CH-News ===')

@@ -5,6 +5,7 @@ __pycache__/
 # Temporäre Dateien & Locks
 *.tmp
 updater/ssc.lock
+updater/updater.lock
 updater/updater.log
 
 # Altes verschachteltes Test-Verzeichnis

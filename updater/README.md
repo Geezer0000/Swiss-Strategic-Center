@@ -16,6 +16,7 @@ Der Updater läuft ohne Claude-App direkt auf diesem PC.
 3. **Übersetzen:** Die lokale KI (Ollama mit `qwen2.5:7b`) übersetzt ins Deutsche mit Schweizer Rechtschreibung, schreibt Kurztitel und Opferangaben.
 4. **Schreiben:** Das Ergebnis geht nach `../data/update.js`. Die geöffnete Webseite lädt die Datei alle 10 Minuten automatisch nach.
 5. **Exportieren:** Die Handy-/PC-Version `../Swiss-Strategic-Center-Mobil.html` wird mit dem neuen Stand neu erzeugt. Sie ist eine einzige Datei mit allen Daten darin (Quellcode im Ordner `../export/`).
+6. **GitHub-Sync:** Wenn `"git_auto_push": true` in `config.json` aktiv ist, committet und pusht der Updater nur die aktualisierten Daten (`data/update.js`, `Swiss-Strategic-Center-Mobil.html`, `updater/state.json`) automatisch auf GitHub (`origin/main`). Andere lokale Änderungen bleiben unberührt. Mit `python ssc_updater.py --no-push` lässt sich der Push für einen einzelnen Lauf überspringen.
 
 | Datei | Zweck |
 |---|---|
